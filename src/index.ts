@@ -1,5 +1,7 @@
+import "./instrument.js";
 import "dotenv/config";
 
+import * as Sentry from "@sentry/node";
 import cors from "cors";
 import express from "express";
 import { loadEnv } from "./config/env.js";
@@ -56,9 +58,21 @@ app.get("/internal/due-soon", asyncHandler((req, res) => internal.dueSoon(req, r
 
 app.use("/api/v1", auth, ensureUser, apiV1Router({ categories, transactions, budgets, occurrences, analytics }));
 
+app.get("/debug-sentry", (_req, _res) => {
+  throw new Error("My first Sentry error!");
+});
+
+Sentry.setupExpressErrorHandler(app);
+
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
-  res.status(500).json({ error: "Internal server error" });
+  const sentryId = "sentry" in res && typeof (res as express.Response & { sentry?: string }).sentry === "string"
+    ? (res as express.Response & { sentry?: string }).sentry
+    : undefined;
+  res.status(500).json({
+    error: "Internal server error",
+    ...(sentryId !== undefined && { sentry: sentryId }),
+  });
 });
 
 app.listen(env.PORT, () => {

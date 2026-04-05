@@ -15,6 +15,7 @@
   "dependencies": {
     "@clerk/backend": "^1.21.0",
     "@prisma/client": "^6.19.3",
+    "@sentry/node": "^10.47.0",
     "cors": "^2.8.5",
     "dotenv": "^17.4.0",
     "express": "^4.21.2",

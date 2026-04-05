@@ -1,5 +1,10 @@
 export type TransactionType = "income" | "expense";
-export type BudgetRecurrence = "monthly"; // TODO: add other recurrences
+export type BudgetRecurrence =
+  | "monthly"
+  | "yearly"
+  | "quarterly"
+  | "weekly"
+  | "daily";
 export type AuthLoginType = "email" | "google" | "apple" | "github" | "microsoft" | "other";
 
 export interface Database {
@@ -155,7 +160,7 @@ export interface Database {
         };
         Relationships: [];
       };
-      money_transaction: {
+      transaction: {
         Row: {
           id: string;
           user_id: string;
@@ -206,4 +211,4 @@ export interface Database {
   };
 }
 
-export type MoneyTransactionRow = Database["public"]["Tables"]["money_transaction"]["Row"];
+export type TransactionRow = Database["public"]["Tables"]["transaction"]["Row"];

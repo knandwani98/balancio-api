@@ -21,7 +21,9 @@ export const createBudgetSchema = z.object({
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   recurrence_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   due_day_of_month: z.number().int().min(1).max(31),
-  recurrence: z.enum(["monthly"]).default("monthly"),
+  recurrence: z
+    .enum(["monthly", "yearly", "quarterly", "weekly", "daily"])
+    .default("monthly"),
 });
 
 export const updateBudgetSchema = createBudgetSchema.partial();

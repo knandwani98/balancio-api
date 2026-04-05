@@ -1,13 +1,13 @@
 import { prisma } from "../lib/prisma.js";
-import { parseISODateOnly, toMoneyTransactionRow } from "../lib/prismaMappers.js";
+import { parseISODateOnly, toTransactionRow } from "../lib/prismaMappers.js";
 import type { Database, TransactionType } from "../types/database.js";
 
 export class TransactionRepository {
   async list(
     userId: string,
     opts: { from?: string; to?: string; type?: TransactionType }
-  ): Promise<Database["public"]["Tables"]["money_transaction"]["Row"][]> {
-    const rows = await prisma.moneyTransaction.findMany({
+  ): Promise<Database["public"]["Tables"]["transaction"]["Row"][]> {
+    const rows = await prisma.transaction.findMany({
       where: {
         user_id: userId,
         ...(opts.from || opts.to
@@ -22,11 +22,11 @@ export class TransactionRepository {
       },
       orderBy: { occurred_at: "desc" },
     });
-    return rows.map(toMoneyTransactionRow);
+    return rows.map(toTransactionRow);
   }
 
-  async create(row: Database["public"]["Tables"]["money_transaction"]["Insert"]) {
-    const created = await prisma.moneyTransaction.create({
+  async create(row: Database["public"]["Tables"]["transaction"]["Insert"]) {
+    const created = await prisma.transaction.create({
       data: {
         user_id: row.user_id,
         type: row.type,
@@ -37,7 +37,7 @@ export class TransactionRepository {
         budget_occurrence_id: row.budget_occurrence_id ?? null,
       },
     });
-    return toMoneyTransactionRow(created);
+    return toTransactionRow(created);
   }
 
   async sumByTypeInMonth(userId: string, year: number, monthIndex0: number) {
@@ -46,7 +46,7 @@ export class TransactionRepository {
     const from = start.toISOString().slice(0, 10);
     const to = end.toISOString().slice(0, 10);
 
-    const rows = await prisma.moneyTransaction.findMany({
+    const rows = await prisma.transaction.findMany({
       where: {
         user_id: userId,
         occurred_at: {
@@ -73,7 +73,7 @@ export class TransactionRepository {
     const from = start.toISOString().slice(0, 10);
     const to = end.toISOString().slice(0, 10);
 
-    const rows = await prisma.moneyTransaction.findMany({
+    const rows = await prisma.transaction.findMany({
       where: {
         user_id: userId,
         type: "expense",

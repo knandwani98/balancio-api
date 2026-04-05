@@ -15,6 +15,10 @@ enum TransactionType {
 
 enum BudgetRecurrence {
   monthly
+  yearly
+  quarterly
+  weekly
+  daily
 }
 
 enum AuthLoginType {
@@ -40,9 +44,9 @@ model User {
   created_at      DateTime       @default(now()) @db.Timestamptz(6)
   updated_at      DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
 
-  categories          Category[]
-  budgets             Budget[]
-  money_transactions  MoneyTransaction[]
+  categories     Category[]
+  budgets        Budget[]
+  transactions   Transaction[]
 
   @@map("user")
 }
@@ -55,9 +59,9 @@ model Category {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  user                User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  budgets             Budget[]
-  money_transactions  MoneyTransaction[]
+  user           User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  budgets        Budget[]
+  transactions   Transaction[]
 
   @@unique([user_id, title])
   @@index([user_id])
@@ -97,32 +101,32 @@ model BudgetOccurrence {
   created_at           DateTime  @default(now()) @db.Timestamptz(6)
   updated_at           DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
-  budget               Budget              @relation(fields: [budget_id], references: [id], onDelete: Cascade)
-  money_transactions   MoneyTransaction[]
+  budget         Budget        @relation(fields: [budget_id], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
 
   @@unique([budget_id, period_start])
   @@index([budget_id])
   @@map("budget_occurrence")
 }
 
-model MoneyTransaction {
-  id                    String           @id @default(uuid()) @db.Uuid
-  user_id               String
-  type                  TransactionType
-  amount_paise          BigInt
-  occurred_at           DateTime         @db.Date
-  category_id           String?          @db.Uuid
-  note                  String?
-  budget_occurrence_id  String?          @db.Uuid
-  created_at            DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
+model Transaction {
+  id                   String           @id @default(uuid()) @db.Uuid
+  user_id              String
+  type                 TransactionType
+  amount_paise         BigInt
+  occurred_at          DateTime         @db.Date
+  category_id          String?          @db.Uuid
+  note                 String?
+  budget_occurrence_id String?          @db.Uuid
+  created_at           DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
 
-  user               User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  category           Category?         @relation(fields: [category_id], references: [id], onDelete: SetNull)
-  budget_occurrence  BudgetOccurrence? @relation(fields: [budget_occurrence_id], references: [id], onDelete: SetNull)
+  user              User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  category          Category?         @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  budget_occurrence BudgetOccurrence? @relation(fields: [budget_occurrence_id], references: [id], onDelete: SetNull)
 
   @@index([user_id])
   @@index([occurred_at])
   @@index([category_id])
-  @@map("money_transaction")
+  @@map("transaction")
 }

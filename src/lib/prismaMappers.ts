@@ -1,4 +1,4 @@
-import type { Budget, BudgetOccurrence, Category, MoneyTransaction } from "@prisma/client";
+import type { Budget, BudgetOccurrence, Category, Transaction } from "@prisma/client";
 import type { Database } from "../types/database.js";
 
 function isoDate(d: Date): string {
@@ -50,9 +50,9 @@ export function toBudgetOccurrenceRow(
   };
 }
 
-export function toMoneyTransactionRow(
-  t: MoneyTransaction
-): Database["public"]["Tables"]["money_transaction"]["Row"] {
+export function toTransactionRow(
+  t: Transaction
+): Database["public"]["Tables"]["transaction"]["Row"] {
   return {
     id: t.id,
     user_id: t.user_id,
