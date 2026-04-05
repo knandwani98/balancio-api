@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum TransactionType {
+  income
+  expense
+}
+
+enum BudgetRecurrence {
+  monthly
+}
+
+enum AuthLoginType {
+  email
+  google
+  apple
+  github
+  microsoft
+  other
+}
+
+model User {
+  id              String         @id
+  email           String?
+  email_verified  Boolean        @default(false)
+  phone           String?
+  phone_verified  Boolean        @default(false)
+  first_name      String?
+  last_name       String?
+  username        String?
+  avatar_url      String?
+  login_type      AuthLoginType  @default(email)
+  created_at      DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime       @default(now()) @updatedAt @db.Timestamptz(6)
+
+  categories          Category[]
+  budgets             Budget[]
+  money_transactions  MoneyTransaction[]
+
+  @@map("user")
+}
+
+model Category {
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String
+  title      String
+  image_url  String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  user                User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  budgets             Budget[]
+  money_transactions  MoneyTransaction[]
+
+  @@unique([user_id, title])
+  @@index([user_id])
+  @@map("category")
+}
+
+model Budget {
+  id                         String            @id @default(uuid()) @db.Uuid
+  user_id                    String
+  category_id                String            @db.Uuid
+  title                      String
+  default_planned_amount_paise BigInt
+  start_date                 DateTime          @db.Date
+  recurrence_end_date        DateTime?         @db.Date
+  due_day_of_month           Int               @db.SmallInt
+  recurrence                 BudgetRecurrence  @default(monthly)
+  created_at                 DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime          @default(now()) @updatedAt @db.Timestamptz(6)
+
+  user         User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  category     Category            @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  occurrences  BudgetOccurrence[]
+
+  @@index([user_id])
+  @@index([category_id])
+  @@map("budget")
+}
+
+model BudgetOccurrence {
+  id                   String    @id @default(uuid()) @db.Uuid
+  budget_id            String    @db.Uuid
+  period_start         DateTime  @db.Date
+  planned_amount_paise BigInt?
+  actual_amount_paise  BigInt?
+  paid_at              DateTime? @db.Timestamptz(6)
+  note                 String?
+  created_at           DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  budget               Budget              @relation(fields: [budget_id], references: [id], onDelete: Cascade)
+  money_transactions   MoneyTransaction[]
+
+  @@unique([budget_id, period_start])
+  @@index([budget_id])
+  @@map("budget_occurrence")
+}
+
+model MoneyTransaction {
+  id                    String           @id @default(uuid()) @db.Uuid
+  user_id               String
+  type                  TransactionType
+  amount_paise          BigInt
+  occurred_at           DateTime         @db.Date
+  category_id           String?          @db.Uuid
+  note                  String?
+  budget_occurrence_id  String?          @db.Uuid
+  created_at            DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
+
+  user               User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  category           Category?         @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  budget_occurrence  BudgetOccurrence? @relation(fields: [budget_occurrence_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([occurred_at])
+  @@index([category_id])
+  @@map("money_transaction")
+}
