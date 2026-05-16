@@ -4,8 +4,13 @@ export type BudgetRecurrence =
   | "yearly"
   | "quarterly"
   | "weekly"
-  | "daily";
+  | "daily"
+  | "one_time";
 export type AuthLoginType = "email" | "google" | "apple" | "github" | "microsoft" | "other";
+export type CategoryKind = "expense" | "income" | "neutral";
+export type PaymentMethod = "cash" | "bank" | "cards" | "upi" | "stocks" | "wallet";
+export type TransactionLineStatus = "pending" | "cleared" | "failed";
+export type OccurrenceScheduleStatus = "PENDING" | "DUE" | "OVERDUE" | "DONE";
 
 export interface Database {
   public: {
@@ -16,7 +21,6 @@ export interface Database {
           email: string | null;
           email_verified: boolean;
           phone: string | null;
-          phone_verified: boolean;
           first_name: string | null;
           last_name: string | null;
           username: string | null;
@@ -30,7 +34,6 @@ export interface Database {
           email?: string | null;
           email_verified?: boolean;
           phone?: string | null;
-          phone_verified?: boolean;
           first_name?: string | null;
           last_name?: string | null;
           username?: string | null;
@@ -44,7 +47,6 @@ export interface Database {
           email?: string | null;
           email_verified?: boolean;
           phone?: string | null;
-          phone_verified?: boolean;
           first_name?: string | null;
           last_name?: string | null;
           username?: string | null;
@@ -58,25 +60,31 @@ export interface Database {
       category: {
         Row: {
           id: string;
-          user_id: string;
-          title: string;
-          image_url: string | null;
+          project_id: string;
+          name: string;
+          icon: string;
+          kind: CategoryKind;
+          created_by_user_id: string;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          user_id: string;
-          title: string;
-          image_url?: string | null;
+          project_id: string;
+          name: string;
+          icon: string;
+          kind: CategoryKind;
+          created_by_user_id: string;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
-          user_id?: string;
-          title?: string;
-          image_url?: string | null;
+          project_id?: string;
+          name?: string;
+          icon?: string;
+          kind?: CategoryKind;
+          created_by_user_id?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -85,7 +93,8 @@ export interface Database {
       budget: {
         Row: {
           id: string;
-          user_id: string;
+          project_id: string;
+          created_by_user_id: string;
           category_id: string;
           title: string;
           default_planned_amount_paise: number;
@@ -98,7 +107,8 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          user_id: string;
+          project_id: string;
+          created_by_user_id: string;
           category_id: string;
           title: string;
           default_planned_amount_paise: number;
@@ -111,7 +121,8 @@ export interface Database {
         };
         Update: {
           id?: string;
-          user_id?: string;
+          project_id?: string;
+          created_by_user_id?: string;
           category_id?: string;
           title?: string;
           default_planned_amount_paise?: number;
@@ -128,33 +139,48 @@ export interface Database {
         Row: {
           id: string;
           budget_id: string;
+          project_id: string;
           period_start: string;
+          due_date: string;
+          schedule_status: OccurrenceScheduleStatus;
           planned_amount_paise: number | null;
           actual_amount_paise: number | null;
           paid_at: string | null;
           note: string | null;
+          projected_transaction_id: string | null;
+          settled_transaction_id: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           budget_id: string;
+          project_id: string;
           period_start: string;
+          due_date: string;
+          schedule_status?: OccurrenceScheduleStatus;
           planned_amount_paise?: number | null;
           actual_amount_paise?: number | null;
           paid_at?: string | null;
           note?: string | null;
+          projected_transaction_id?: string | null;
+          settled_transaction_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           budget_id?: string;
+          project_id?: string;
           period_start?: string;
+          due_date?: string;
+          schedule_status?: OccurrenceScheduleStatus;
           planned_amount_paise?: number | null;
           actual_amount_paise?: number | null;
           paid_at?: string | null;
           note?: string | null;
+          projected_transaction_id?: string | null;
+          settled_transaction_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -163,37 +189,61 @@ export interface Database {
       transaction: {
         Row: {
           id: string;
+          project_id: string;
+          created_by_user_id: string;
           user_id: string;
           type: TransactionType;
+          name: string;
           amount_paise: number;
+          line_status: TransactionLineStatus;
+          payment_method: PaymentMethod;
           occurred_at: string;
           category_id: string | null;
           note: string | null;
           budget_occurrence_id: string | null;
+          bank_account_id: string | null;
+          card_id: string | null;
+          upi_profile_id: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
+          project_id: string;
+          created_by_user_id: string;
           user_id: string;
           type: TransactionType;
+          name: string;
           amount_paise: number;
+          line_status?: TransactionLineStatus;
+          payment_method?: PaymentMethod;
           occurred_at: string;
           category_id?: string | null;
           note?: string | null;
           budget_occurrence_id?: string | null;
+          bank_account_id?: string | null;
+          card_id?: string | null;
+          upi_profile_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
+          project_id?: string;
+          created_by_user_id?: string;
           user_id?: string;
           type?: TransactionType;
+          name?: string;
           amount_paise?: number;
+          line_status?: TransactionLineStatus;
+          payment_method?: PaymentMethod;
           occurred_at?: string;
           category_id?: string | null;
           note?: string | null;
           budget_occurrence_id?: string | null;
+          bank_account_id?: string | null;
+          card_id?: string | null;
+          upi_profile_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -206,6 +256,10 @@ export interface Database {
       transaction_type: TransactionType;
       budget_recurrence: BudgetRecurrence;
       auth_login_type: AuthLoginType;
+      category_kind: CategoryKind;
+      payment_method: PaymentMethod;
+      transaction_line_status: TransactionLineStatus;
+      occurrence_schedule_status: OccurrenceScheduleStatus;
     };
     CompositeTypes: Record<string, never>;
   };

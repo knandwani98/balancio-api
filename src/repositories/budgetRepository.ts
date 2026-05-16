@@ -4,28 +4,30 @@ import { parseISODateOnly, toBudgetRow } from "../lib/prismaMappers.js";
 import type { Database } from "../types/database.js";
 
 export class BudgetRepository {
-  async list(userId: string): Promise<Database["public"]["Tables"]["budget"]["Row"][]> {
+  async list(projectId: string): Promise<Database["public"]["Tables"]["budget"]["Row"][]> {
     const rows = await prisma.budget.findMany({
-      where: { user_id: userId },
+      where: { project_id: projectId },
       orderBy: { created_at: "desc" },
     });
     return rows.map(toBudgetRow);
   }
 
-  async getById(userId: string, id: string) {
+  async getById(projectId: string, id: string) {
     const row = await prisma.budget.findFirst({
-      where: { user_id: userId, id },
+      where: { project_id: projectId, id },
     });
     return row ? toBudgetRow(row) : null;
   }
 
   async create(
-    userId: string,
-    input: Omit<Database["public"]["Tables"]["budget"]["Insert"], "user_id">
+    projectId: string,
+    createdByUserId: string,
+    input: Omit<Database["public"]["Tables"]["budget"]["Insert"], "project_id" | "created_by_user_id">
   ) {
     const row = await prisma.budget.create({
       data: {
-        user_id: userId,
+        project_id: projectId,
+        created_by_user_id: createdByUserId,
         category_id: input.category_id,
         title: input.title,
         default_planned_amount_paise: BigInt(input.default_planned_amount_paise),
@@ -41,12 +43,12 @@ export class BudgetRepository {
   }
 
   async update(
-    userId: string,
+    projectId: string,
     id: string,
     patch: Database["public"]["Tables"]["budget"]["Update"]
   ) {
     const owned = await prisma.budget.findFirst({
-      where: { id, user_id: userId },
+      where: { id, project_id: projectId },
     });
     if (!owned) return null;
 
@@ -71,9 +73,9 @@ export class BudgetRepository {
     return toBudgetRow(row);
   }
 
-  async delete(userId: string, id: string) {
+  async delete(projectId: string, id: string) {
     await prisma.budget.deleteMany({
-      where: { user_id: userId, id },
+      where: { project_id: projectId, id },
     });
   }
 }

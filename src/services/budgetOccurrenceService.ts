@@ -1,4 +1,4 @@
-import type { BudgetRecurrence, Database } from "../types/database.js";
+import type { BudgetRecurrence, Database, OccurrenceScheduleStatus } from "../types/database.js";
 import {
   addDaysUTC,
   addMonthsUTC,
@@ -21,6 +21,7 @@ export type MergedOccurrence = {
   actual_amount_paise: number | null;
   paid_at: string | null;
   note: string | null;
+  schedule_status: OccurrenceScheduleStatus;
   source: "virtual" | "db";
   occurrence_id: string | null;
 };
@@ -47,6 +48,7 @@ function pushOccurrence(
     actual_amount_paise: null,
     paid_at: null,
     note: null,
+    schedule_status: "PENDING",
   });
 }
 
@@ -192,6 +194,33 @@ function computeDailyOccurrences(
   return out;
 }
 
+function computeOneTimeOccurrences(
+  budget: Pick<
+    BudgetRow,
+    | "id"
+    | "start_date"
+    | "recurrence_end_date"
+    | "due_day_of_month"
+    | "default_planned_amount_paise"
+  >,
+  rangeStartISO: string,
+  rangeEndISO: string
+): Omit<MergedOccurrence, "source" | "occurrence_id">[] {
+  const budgetStart = parseISODate(budget.start_date);
+  const rangeA = parseISODate(rangeStartISO);
+  const rangeB = parseISODate(rangeEndISO);
+  if (budgetStart.getTime() < rangeA.getTime() || budgetStart.getTime() > rangeB.getTime()) {
+    return [];
+  }
+  const y = budgetStart.getUTCFullYear();
+  const m = budgetStart.getUTCMonth();
+  const period_start = toISODate(startOfMonthUTC(y, m));
+  const due_date = toISODate(dueDateInMonth(y, m, budget.due_day_of_month));
+  const out: Omit<MergedOccurrence, "source" | "occurrence_id">[] = [];
+  pushOccurrence(budget, period_start, due_date, out);
+  return out;
+}
+
 /**
  * Pure: expand budget into virtual occurrences between rangeStart and rangeEnd (UTC calendar dates).
  */
@@ -220,6 +249,8 @@ export function computeOccurrences(
       return computeWeeklyOccurrences(budget, rangeStartISO, rangeEndISO);
     case "daily":
       return computeDailyOccurrences(budget, rangeStartISO, rangeEndISO);
+    case "one_time":
+      return computeOneTimeOccurrences(budget, rangeStartISO, rangeEndISO);
     default: {
       const _exhaustive: never = recurrence;
       return _exhaustive;
@@ -255,6 +286,7 @@ export function mergeOccurrences(
       actual_amount_paise: db.actual_amount_paise,
       paid_at: db.paid_at,
       note: db.note,
+      schedule_status: db.schedule_status,
       source: "db",
       occurrence_id: db.id,
     };

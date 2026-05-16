@@ -1,4 +1,10 @@
-import type { Budget, BudgetOccurrence, Category, Transaction } from "@prisma/client";
+import type {
+  Budget,
+  BudgetOccurrence,
+  Category,
+  Goal,
+  Transaction,
+} from "@prisma/client";
 import type { Database } from "../types/database.js";
 
 function isoDate(d: Date): string {
@@ -8,9 +14,11 @@ function isoDate(d: Date): string {
 export function toCategoryRow(c: Category): Database["public"]["Tables"]["category"]["Row"] {
   return {
     id: c.id,
-    user_id: c.user_id,
-    title: c.title,
-    image_url: c.image_url,
+    project_id: c.project_id,
+    name: c.name,
+    icon: c.icon,
+    kind: c.kind,
+    created_by_user_id: c.created_by_user_id,
     created_at: c.created_at.toISOString(),
     updated_at: c.updated_at.toISOString(),
   };
@@ -19,7 +27,8 @@ export function toCategoryRow(c: Category): Database["public"]["Tables"]["catego
 export function toBudgetRow(b: Budget): Database["public"]["Tables"]["budget"]["Row"] {
   return {
     id: b.id,
-    user_id: b.user_id,
+    project_id: b.project_id,
+    created_by_user_id: b.created_by_user_id,
     category_id: b.category_id,
     title: b.title,
     default_planned_amount_paise: Number(b.default_planned_amount_paise),
@@ -38,15 +47,43 @@ export function toBudgetOccurrenceRow(
   return {
     id: o.id,
     budget_id: o.budget_id,
+    project_id: o.project_id,
     period_start: isoDate(o.period_start),
+    due_date: isoDate(o.due_date),
+    schedule_status: o.schedule_status,
     planned_amount_paise:
       o.planned_amount_paise === null ? null : Number(o.planned_amount_paise),
     actual_amount_paise:
       o.actual_amount_paise === null ? null : Number(o.actual_amount_paise),
     paid_at: o.paid_at ? o.paid_at.toISOString() : null,
     note: o.note,
+    projected_transaction_id: o.projected_transaction_id,
+    settled_transaction_id: o.settled_transaction_id,
     created_at: o.created_at.toISOString(),
     updated_at: o.updated_at.toISOString(),
+  };
+}
+
+/** JSON-serializable goal row (BigInt / Decimal → number). */
+export function toGoalRow(g: Goal) {
+  return {
+    id: g.id,
+    project_id: g.project_id,
+    created_by_user_id: g.created_by_user_id,
+    name: g.name,
+    amount_paise: Number(g.amount_paise),
+    frequency: g.frequency,
+    tenure_mode: g.tenure_mode,
+    fixed_days: g.fixed_days,
+    aim_amount_paise: g.aim_amount_paise == null ? null : Number(g.aim_amount_paise),
+    source: g.source,
+    interest_rate_pa: g.interest_rate_pa != null ? Number(g.interest_rate_pa) : null,
+    start_date: g.start_date ? isoDate(g.start_date) : null,
+    maturity_date: g.maturity_date ? isoDate(g.maturity_date) : null,
+    linked_bank_account_id: g.linked_bank_account_id,
+    is_archived: g.is_archived,
+    created_at: g.created_at.toISOString(),
+    updated_at: g.updated_at.toISOString(),
   };
 }
 
@@ -55,13 +92,21 @@ export function toTransactionRow(
 ): Database["public"]["Tables"]["transaction"]["Row"] {
   return {
     id: t.id,
+    project_id: t.project_id,
+    created_by_user_id: t.created_by_user_id,
     user_id: t.user_id,
     type: t.type,
+    name: t.name,
     amount_paise: Number(t.amount_paise),
+    line_status: t.line_status,
+    payment_method: t.payment_method,
     occurred_at: isoDate(t.occurred_at),
     category_id: t.category_id,
     note: t.note,
     budget_occurrence_id: t.budget_occurrence_id,
+    bank_account_id: t.bank_account_id,
+    card_id: t.card_id,
+    upi_profile_id: t.upi_profile_id,
     created_at: t.created_at.toISOString(),
     updated_at: t.updated_at.toISOString(),
   };

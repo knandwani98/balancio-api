@@ -1,45 +1,71 @@
 import { prisma } from "../lib/prisma.js";
 import { toCategoryRow } from "../lib/prismaMappers.js";
 import type { Database } from "../types/database.js";
+import type { CategoryKind } from "@prisma/client";
+import { seedDefaultCategories, seedDefaultGoals } from "../services/projectBootstrapService.js";
 
-const UNASSIGNED_TITLE = "unassigned";
+const UNASSIGNED_NAME = "unassigned";
 
 export class CategoryRepository {
-  async ensureUnassigned(userId: string) {
+  /** Idempotent: canonical category list + default goals for migrated/legacy projects. */
+  async ensureCanonicalSeed(projectId: string, creatorUserId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await seedDefaultCategories(tx, projectId, creatorUserId);
+      await seedDefaultGoals(tx, projectId, creatorUserId);
+    });
+  }
+
+  async ensureUnassigned(projectId: string, creatorUserId: string) {
     return prisma.category.upsert({
       where: {
-        user_id_title: { user_id: userId, title: UNASSIGNED_TITLE },
+        project_id_name_kind: {
+          project_id: projectId,
+          name: UNASSIGNED_NAME,
+          kind: "neutral",
+        },
       },
-      create: { user_id: userId, title: UNASSIGNED_TITLE },
+      create: {
+        project_id: projectId,
+        name: UNASSIGNED_NAME,
+        icon: "folder",
+        kind: "neutral",
+        created_by_user_id: creatorUserId,
+      },
       update: {},
       select: { id: true },
     });
   }
 
-  async list(userId: string): Promise<Database["public"]["Tables"]["category"]["Row"][]> {
-    await this.ensureUnassigned(userId);
+  async list(projectId: string, creatorUserIdForUnassigned: string): Promise<Database["public"]["Tables"]["category"]["Row"][]> {
+    await this.ensureUnassigned(projectId, creatorUserIdForUnassigned);
     const rows = await prisma.category.findMany({
-      where: { user_id: userId },
-      orderBy: { title: "asc" },
+      where: { project_id: projectId },
+      orderBy: { name: "asc" },
     });
     return rows.map(toCategoryRow);
   }
 
-  async create(userId: string, input: { title: string; image_url?: string | null }) {
-    await this.ensureUnassigned(userId);
+  async create(
+    projectId: string,
+    actingUserId: string,
+    input: { name: string; icon: string; kind: CategoryKind }
+  ) {
+    await this.ensureUnassigned(projectId, actingUserId);
     const row = await prisma.category.create({
       data: {
-        user_id: userId,
-        title: input.title,
-        image_url: input.image_url ?? null,
+        project_id: projectId,
+        name: input.name,
+        icon: input.icon,
+        kind: input.kind,
+        created_by_user_id: actingUserId,
       },
     });
     return toCategoryRow(row);
   }
 
-  async getById(userId: string, id: string) {
+  async getById(projectId: string, id: string) {
     const row = await prisma.category.findFirst({
-      where: { user_id: userId, id },
+      where: { project_id: projectId, id },
     });
     return row ? toCategoryRow(row) : null;
   }

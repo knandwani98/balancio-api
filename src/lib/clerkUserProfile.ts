@@ -6,7 +6,6 @@ export type ClerkUserUpsertInput = {
   email: string | null;
   email_verified: boolean;
   phone: string | null;
-  phone_verified: boolean;
   first_name: string | null;
   last_name: string | null;
   username: string | null;
@@ -46,27 +45,22 @@ function primaryEmail(data: UserJSON): { address: string | null; verified: boole
   };
 }
 
-function primaryPhone(data: UserJSON): { number: string | null; verified: boolean } {
+function primaryPhoneNumber(data: UserJSON): string | null {
   const primaryId = data.primary_phone_number_id;
   const list = data.phone_numbers ?? [];
   const primary = primaryId ? list.find((p) => p.id === primaryId) : list[0];
-  if (!primary) return { number: null, verified: false };
-  return {
-    number: primary.phone_number,
-    verified: isVerified(primary.verification?.status),
-  };
+  if (!primary) return null;
+  return primary.phone_number;
 }
 
 export function clerkUserJsonToUpsert(data: UserJSON): ClerkUserUpsertInput {
   const email = primaryEmail(data);
-  const phone = primaryPhone(data);
   const avatar = data.image_url?.trim();
   return {
     id: data.id,
     email: email.address,
     email_verified: email.verified,
-    phone: phone.number,
-    phone_verified: phone.verified,
+    phone: primaryPhoneNumber(data),
     first_name: data.first_name,
     last_name: data.last_name,
     username: data.username,
@@ -95,7 +89,6 @@ export function clerkSdkUserToUpsert(user: User): ClerkUserUpsertInput {
     email: email?.emailAddress ?? null,
     email_verified: isVerified(email?.verification?.status),
     phone: phone?.phoneNumber ?? null,
-    phone_verified: isVerified(phone?.verification?.status),
     first_name: user.firstName,
     last_name: user.lastName,
     username: user.username,

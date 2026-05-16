@@ -13,24 +13,29 @@ export class AnalyticsService {
     private categories: CategoryRepository
   ) {}
 
-  async monthlyDashboard(userId: string, year: number, monthIndex0: number) {
+  async monthlyDashboard(
+    projectId: string,
+    projectCreatorUserId: string,
+    year: number,
+    monthIndex0: number
+  ) {
     const monthStart = startOfMonthUTC(year, monthIndex0);
     const monthEnd = new Date(Date.UTC(year, monthIndex0 + 1, 0));
     const from = toISODate(monthStart);
     const to = toISODate(monthEnd);
 
-    const sums = await this.transactions.sumByTypeInMonth(userId, year, monthIndex0);
-    const byCat = await this.transactions.sumExpenseByCategoryInMonth(userId, year, monthIndex0);
-    const cats = await this.categories.list(userId);
-    const catTitles = new Map(cats.map((c) => [c.id, c.title]));
+    const sums = await this.transactions.sumByTypeInMonth(projectId, year, monthIndex0);
+    const byCat = await this.transactions.sumExpenseByCategoryInMonth(projectId, year, monthIndex0);
+    const cats = await this.categories.list(projectId, projectCreatorUserId);
+    const catNames = new Map(cats.map((c) => [c.id, c.name]));
 
     const category_breakdown = Array.from(byCat.entries()).map(([category_id, amount_paise]) => ({
       category_id,
-      title: category_id ? (catTitles.get(category_id) ?? "Unknown") : "Uncategorized",
+      name: category_id ? (catNames.get(category_id) ?? "Unknown") : "Uncategorized",
       expense_paise: amount_paise,
     }));
 
-    const budgetList = await this.budgets.list(userId);
+    const budgetList = await this.budgets.list(projectId);
     let planned_expense_paise = 0;
     for (const b of budgetList) {
       const virtual = computeOccurrences(b, from, to);

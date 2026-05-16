@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { parseISODateOnly, toBudgetOccurrenceRow } from "../lib/prismaMappers.js";
 import type { Database } from "../types/database.js";
+import type { OccurrenceScheduleStatus } from "@prisma/client";
 
 export class BudgetOccurrenceRepository {
   async getById(id: string) {
@@ -40,8 +41,11 @@ export class BudgetOccurrenceRepository {
 
   async upsert(
     budgetId: string,
+    projectId: string,
     row: {
       period_start: string;
+      due_date: string;
+      schedule_status?: OccurrenceScheduleStatus;
       planned_amount_paise?: number | null;
       actual_amount_paise?: number | null;
       paid_at?: string | null;
@@ -60,6 +64,11 @@ export class BudgetOccurrenceRepository {
     const paid =
       row.paid_at !== undefined ? row.paid_at : (existing?.paid_at ?? null);
     const note = row.note !== undefined ? row.note : (existing?.note ?? null);
+    const dueDate = parseISODateOnly(row.due_date);
+    const scheduleStatus =
+      row.schedule_status !== undefined
+        ? row.schedule_status
+        : (existing?.schedule_status ?? "PENDING");
 
     const period = parseISODateOnly(row.period_start);
 
@@ -72,13 +81,18 @@ export class BudgetOccurrenceRepository {
       },
       create: {
         budget_id: budgetId,
+        project_id: projectId,
         period_start: period,
+        due_date: dueDate,
+        schedule_status: scheduleStatus,
         planned_amount_paise: planned === null ? null : BigInt(planned),
         actual_amount_paise: actual === null ? null : BigInt(actual),
         paid_at: paid ? new Date(paid) : null,
         note,
       },
       update: {
+        due_date: dueDate,
+        schedule_status: scheduleStatus,
         planned_amount_paise: planned === null ? null : BigInt(planned),
         actual_amount_paise: actual === null ? null : BigInt(actual),
         paid_at: paid ? new Date(paid) : null,
