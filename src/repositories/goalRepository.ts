@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import type { GoalTenureMode, BudgetRecurrence, PaymentMethod } from "@prisma/client";
 
@@ -18,11 +19,11 @@ export class GoalRepository {
     createdByUserId: string,
     data: {
       name: string;
-      amount_paise: bigint;
+      amount: Prisma.Decimal;
       frequency: BudgetRecurrence;
       tenure_mode: GoalTenureMode;
       fixed_days?: number | null;
-      aim_amount_paise?: bigint | null;
+      aim_amount?: Prisma.Decimal | null;
       source: PaymentMethod;
       interest_rate_pa?: number | null;
       start_date?: Date | null;
@@ -35,11 +36,11 @@ export class GoalRepository {
         project_id: projectId,
         created_by_user_id: createdByUserId,
         name: data.name,
-        amount_paise: data.amount_paise,
+        amount: data.amount,
         frequency: data.frequency,
         tenure_mode: data.tenure_mode,
         fixed_days: data.fixed_days ?? null,
-        aim_amount_paise: data.aim_amount_paise ?? null,
+        aim_amount: data.aim_amount ?? null,
         source: data.source,
         interest_rate_pa: data.interest_rate_pa ?? null,
         start_date: data.start_date ?? null,

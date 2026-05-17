@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+/** Non-negative monetary amount (fractional values allowed). */
+export const amountNonNegative = z
+  .number()
+  .nonnegative()
+  .finite()
+  .max(1e15, "amount too large");
+
 export const createCategorySchema = z.object({
   name: z.string().min(1),
   icon: z.string().min(1),
@@ -9,7 +16,7 @@ export const createCategorySchema = z.object({
 export const createTransactionSchema = z.object({
   type: z.enum(["income", "expense"]).default("expense"),
   name: z.string().min(1),
-  amount_paise: z.number().int().nonnegative(),
+  amount: amountNonNegative,
   line_status: z.enum(["pending", "cleared", "failed"]).optional(),
   payment_method: z.enum(["cash", "bank", "cards", "upi", "stocks", "wallet"]).optional(),
   occurred_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -24,7 +31,7 @@ export const createTransactionSchema = z.object({
 export const createBudgetSchema = z.object({
   category_id: z.string().uuid(),
   title: z.string().min(1),
-  default_planned_amount_paise: z.number().int().nonnegative(),
+  default_planned_amount: amountNonNegative,
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   recurrence_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   due_day_of_month: z.number().int().min(1).max(31),
@@ -36,8 +43,8 @@ export const createBudgetSchema = z.object({
 export const updateBudgetSchema = createBudgetSchema.partial();
 
 export const patchOccurrenceSchema = z.object({
-  planned_amount_paise: z.number().int().nonnegative().optional().nullable(),
-  actual_amount_paise: z.number().int().nonnegative().optional().nullable(),
+  planned_amount: amountNonNegative.optional().nullable(),
+  actual_amount: amountNonNegative.optional().nullable(),
   paid_at: z.string().datetime().optional().nullable(),
   note: z.string().optional().nullable(),
 });
@@ -66,11 +73,11 @@ export const inviteEmailSchema = z.object({
 
 export const createGoalSchema = z.object({
   name: z.string().min(1),
-  amount_paise: z.number().int().nonnegative(),
+  amount: amountNonNegative,
   frequency: z.enum(["monthly", "yearly", "quarterly", "weekly", "daily", "one_time"]),
   tenure_mode: z.enum(["infinite", "fixed_days", "aim"]),
   fixed_days: z.number().int().positive().optional().nullable(),
-  aim_amount_paise: z.number().int().nonnegative().optional().nullable(),
+  aim_amount: amountNonNegative.optional().nullable(),
   source: z.enum(["cash", "bank", "cards", "upi", "stocks", "wallet"]),
   interest_rate_pa: z.number().optional().nullable(),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
@@ -114,11 +121,28 @@ export const updateUpiProfileSchema = z.object({
   nickname: z.string().min(1).optional(),
 });
 
+/** Clerk/CDN profile images must parse as URLs; strict `z.string().url()` can reject valid Clerk URLs. */
+export const profileImageUrlSchema = z
+  .string()
+  .min(8)
+  .max(2048)
+  .refine(
+    (s) => {
+      try {
+        const u = new URL(s);
+        return u.protocol === "https:" || u.protocol === "http:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "Invalid profile image URL" }
+  );
+
 /** Onboarding / profile: persisted on `user` (phone is not verified via SMS). */
 export const patchMyProfileSchema = z.object({
   first_name: z.string().min(1).max(128),
   last_name: z.string().min(1).max(128),
   phone: z.string().regex(/^\+[1-9]\d{6,14}$/),
   username: z.string().max(64).nullable().optional(),
-  avatar_url: z.string().url().optional().nullable(),
+  avatar_url: profileImageUrlSchema.optional().nullable(),
 });

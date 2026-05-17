@@ -62,7 +62,7 @@ export function transactionController(
         user_id: req.userId,
         type: body.type,
         name: body.name,
-        amount_paise: body.amount_paise,
+        amount: body.amount,
         line_status: body.line_status ?? "pending",
         payment_method: body.payment_method ?? "cash",
         occurred_at: body.occurred_at,

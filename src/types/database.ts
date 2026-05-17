@@ -97,7 +97,7 @@ export interface Database {
           created_by_user_id: string;
           category_id: string;
           title: string;
-          default_planned_amount_paise: number;
+          default_planned_amount: number;
           start_date: string;
           recurrence_end_date: string | null;
           due_day_of_month: number;
@@ -111,7 +111,7 @@ export interface Database {
           created_by_user_id: string;
           category_id: string;
           title: string;
-          default_planned_amount_paise: number;
+          default_planned_amount: number;
           start_date: string;
           recurrence_end_date?: string | null;
           due_day_of_month: number;
@@ -125,7 +125,7 @@ export interface Database {
           created_by_user_id?: string;
           category_id?: string;
           title?: string;
-          default_planned_amount_paise?: number;
+          default_planned_amount?: number;
           start_date?: string;
           recurrence_end_date?: string | null;
           due_day_of_month?: number;
@@ -143,8 +143,8 @@ export interface Database {
           period_start: string;
           due_date: string;
           schedule_status: OccurrenceScheduleStatus;
-          planned_amount_paise: number | null;
-          actual_amount_paise: number | null;
+          planned_amount: number | null;
+          actual_amount: number | null;
           paid_at: string | null;
           note: string | null;
           projected_transaction_id: string | null;
@@ -159,8 +159,8 @@ export interface Database {
           period_start: string;
           due_date: string;
           schedule_status?: OccurrenceScheduleStatus;
-          planned_amount_paise?: number | null;
-          actual_amount_paise?: number | null;
+          planned_amount?: number | null;
+          actual_amount?: number | null;
           paid_at?: string | null;
           note?: string | null;
           projected_transaction_id?: string | null;
@@ -175,8 +175,8 @@ export interface Database {
           period_start?: string;
           due_date?: string;
           schedule_status?: OccurrenceScheduleStatus;
-          planned_amount_paise?: number | null;
-          actual_amount_paise?: number | null;
+          planned_amount?: number | null;
+          actual_amount?: number | null;
           paid_at?: string | null;
           note?: string | null;
           projected_transaction_id?: string | null;
@@ -194,7 +194,7 @@ export interface Database {
           user_id: string;
           type: TransactionType;
           name: string;
-          amount_paise: number;
+          amount: number;
           line_status: TransactionLineStatus;
           payment_method: PaymentMethod;
           occurred_at: string;
@@ -214,7 +214,7 @@ export interface Database {
           user_id: string;
           type: TransactionType;
           name: string;
-          amount_paise: number;
+          amount: number;
           line_status?: TransactionLineStatus;
           payment_method?: PaymentMethod;
           occurred_at: string;
@@ -234,7 +234,7 @@ export interface Database {
           user_id?: string;
           type?: TransactionType;
           name?: string;
-          amount_paise?: number;
+          amount?: number;
           line_status?: TransactionLineStatus;
           payment_method?: PaymentMethod;
           occurred_at?: string;

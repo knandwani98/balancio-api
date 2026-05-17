@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { parseISODateOnly, toBudgetOccurrenceRow } from "../lib/prismaMappers.js";
+import { toPrismaDecimal } from "../lib/money.js";
 import type { Database } from "../types/database.js";
 import type { OccurrenceScheduleStatus } from "@prisma/client";
 
@@ -46,21 +47,21 @@ export class BudgetOccurrenceRepository {
       period_start: string;
       due_date: string;
       schedule_status?: OccurrenceScheduleStatus;
-      planned_amount_paise?: number | null;
-      actual_amount_paise?: number | null;
+      planned_amount?: number | null;
+      actual_amount?: number | null;
       paid_at?: string | null;
       note?: string | null;
     }
   ) {
     const existing = await this.getByBudgetAndPeriod(budgetId, row.period_start);
     const planned =
-      row.planned_amount_paise !== undefined
-        ? row.planned_amount_paise
-        : (existing?.planned_amount_paise ?? null);
+      row.planned_amount !== undefined
+        ? row.planned_amount
+        : (existing?.planned_amount ?? null);
     const actual =
-      row.actual_amount_paise !== undefined
-        ? row.actual_amount_paise
-        : (existing?.actual_amount_paise ?? null);
+      row.actual_amount !== undefined
+        ? row.actual_amount
+        : (existing?.actual_amount ?? null);
     const paid =
       row.paid_at !== undefined ? row.paid_at : (existing?.paid_at ?? null);
     const note = row.note !== undefined ? row.note : (existing?.note ?? null);
@@ -85,16 +86,16 @@ export class BudgetOccurrenceRepository {
         period_start: period,
         due_date: dueDate,
         schedule_status: scheduleStatus,
-        planned_amount_paise: planned === null ? null : BigInt(planned),
-        actual_amount_paise: actual === null ? null : BigInt(actual),
+        planned_amount: planned === null ? null : toPrismaDecimal(planned),
+        actual_amount: actual === null ? null : toPrismaDecimal(actual),
         paid_at: paid ? new Date(paid) : null,
         note,
       },
       update: {
         due_date: dueDate,
         schedule_status: scheduleStatus,
-        planned_amount_paise: planned === null ? null : BigInt(planned),
-        actual_amount_paise: actual === null ? null : BigInt(actual),
+        planned_amount: planned === null ? null : toPrismaDecimal(planned),
+        actual_amount: actual === null ? null : toPrismaDecimal(actual),
         paid_at: paid ? new Date(paid) : null,
         note,
       },

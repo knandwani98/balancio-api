@@ -48,7 +48,7 @@ export function budgetController(
       const row = await budgets.create(projectId, req.userId, {
         category_id: parsed.data.category_id,
         title: parsed.data.title,
-        default_planned_amount_paise: parsed.data.default_planned_amount_paise,
+        default_planned_amount: parsed.data.default_planned_amount,
         start_date: parsed.data.start_date,
         recurrence_end_date: parsed.data.recurrence_end_date ?? null,
         due_day_of_month: parsed.data.due_day_of_month,
@@ -138,8 +138,8 @@ export function budgetController(
       const row = await occurrences.upsert(budget.id, projectId, {
         period_start: periodStart,
         due_date: dueDate,
-        planned_amount_paise: parsed.data.planned_amount_paise,
-        actual_amount_paise: parsed.data.actual_amount_paise,
+        planned_amount: parsed.data.planned_amount,
+        actual_amount: parsed.data.actual_amount,
         paid_at: parsed.data.paid_at,
         note: parsed.data.note,
       });

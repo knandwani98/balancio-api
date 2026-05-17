@@ -6,6 +6,7 @@ import type { ProjectRepository } from "../repositories/projectRepository.js";
 import { createGoalSchema } from "../models/schemas.js";
 import { assertProjectMember } from "../lib/projectAuthz.js";
 import { parseISODateOnly, toGoalRow } from "../lib/prismaMappers.js";
+import { toPrismaDecimal } from "../lib/money.js";
 
 export function goalController(
   goals: GoalRepository,
@@ -35,11 +36,11 @@ export function goalController(
       const d = parsed.data;
       const row = await goals.create(projectId, req.userId, {
         name: d.name,
-        amount_paise: BigInt(d.amount_paise),
+        amount: toPrismaDecimal(d.amount),
         frequency: d.frequency,
         tenure_mode: d.tenure_mode,
         fixed_days: d.fixed_days ?? null,
-        aim_amount_paise: d.aim_amount_paise != null ? BigInt(d.aim_amount_paise) : null,
+        aim_amount: d.aim_amount != null ? toPrismaDecimal(d.aim_amount) : null,
         source: d.source,
         interest_rate_pa: d.interest_rate_pa ?? null,
         start_date: d.start_date ? parseISODateOnly(d.start_date) : null,

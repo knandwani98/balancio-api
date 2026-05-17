@@ -193,7 +193,7 @@ model Budget {
   created_by_user_id           String
   category_id                  String           @db.Uuid
   title                        String
-  default_planned_amount_paise BigInt
+  default_planned_amount Decimal @db.Decimal(19, 4)
   start_date                   DateTime         @db.Date
   recurrence_end_date          DateTime?        @db.Date
   due_day_of_month             Int              @db.SmallInt
@@ -218,8 +218,8 @@ model BudgetOccurrence {
   period_start             DateTime                  @db.Date
   due_date                 DateTime                  @db.Date
   schedule_status          OccurrenceScheduleStatus  @default(PENDING)
-  planned_amount_paise     BigInt?
-  actual_amount_paise      BigInt?
+  planned_amount     Decimal? @db.Decimal(19, 4)
+  actual_amount      Decimal? @db.Decimal(19, 4)
   paid_at                  DateTime?                 @db.Timestamptz(6)
   note                     String?
   projected_transaction_id String?                   @db.Uuid
@@ -247,7 +247,7 @@ model Transaction {
   user_id              String
   type                 TransactionType
   name                 String
-  amount_paise         BigInt
+  amount         Decimal @db.Decimal(19, 4)
   line_status          TransactionLineStatus  @default(pending)
   payment_method       PaymentMethod          @default(cash)
   occurred_at          DateTime               @db.Date
@@ -283,11 +283,11 @@ model Goal {
   project_id             String          @db.Uuid
   created_by_user_id     String
   name                   String
-  amount_paise           BigInt
+  amount           Decimal @db.Decimal(19, 4)
   frequency              BudgetRecurrence
   tenure_mode            GoalTenureMode
   fixed_days             Int?
-  aim_amount_paise       BigInt?
+  aim_amount       Decimal? @db.Decimal(19, 4)
   source                 PaymentMethod
   interest_rate_pa       Decimal?        @db.Decimal(5, 2)
   start_date             DateTime?       @db.Date

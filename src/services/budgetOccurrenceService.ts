@@ -17,8 +17,8 @@ export type MergedOccurrence = {
   budget_id: string;
   period_start: string;
   due_date: string;
-  planned_amount_paise: number;
-  actual_amount_paise: number | null;
+  planned_amount: number;
+  actual_amount: number | null;
   paid_at: string | null;
   note: string | null;
   schedule_status: OccurrenceScheduleStatus;
@@ -35,7 +35,7 @@ function minDate(a: Date, b: Date): Date {
 }
 
 function pushOccurrence(
-  budget: Pick<BudgetRow, "id" | "default_planned_amount_paise">,
+  budget: Pick<BudgetRow, "id" | "default_planned_amount">,
   period_start: string,
   due_date: string,
   out: Omit<MergedOccurrence, "source" | "occurrence_id">[]
@@ -44,8 +44,8 @@ function pushOccurrence(
     budget_id: budget.id,
     period_start,
     due_date,
-    planned_amount_paise: budget.default_planned_amount_paise,
-    actual_amount_paise: null,
+    planned_amount: budget.default_planned_amount,
+    actual_amount: null,
     paid_at: null,
     note: null,
     schedule_status: "PENDING",
@@ -60,7 +60,7 @@ function computeSteppedMonthOccurrences(
     | "start_date"
     | "recurrence_end_date"
     | "due_day_of_month"
-    | "default_planned_amount_paise"
+    | "default_planned_amount"
   >,
   rangeStartISO: string,
   rangeEndISO: string,
@@ -112,7 +112,7 @@ function computeWeeklyOccurrences(
     | "start_date"
     | "recurrence_end_date"
     | "due_day_of_month"
-    | "default_planned_amount_paise"
+    | "default_planned_amount"
   >,
   rangeStartISO: string,
   rangeEndISO: string
@@ -167,7 +167,7 @@ function computeDailyOccurrences(
     | "id"
     | "start_date"
     | "recurrence_end_date"
-    | "default_planned_amount_paise"
+    | "default_planned_amount"
   >,
   rangeStartISO: string,
   rangeEndISO: string
@@ -201,7 +201,7 @@ function computeOneTimeOccurrences(
     | "start_date"
     | "recurrence_end_date"
     | "due_day_of_month"
-    | "default_planned_amount_paise"
+    | "default_planned_amount"
   >,
   rangeStartISO: string,
   rangeEndISO: string
@@ -231,7 +231,7 @@ export function computeOccurrences(
     | "start_date"
     | "recurrence_end_date"
     | "due_day_of_month"
-    | "default_planned_amount_paise"
+    | "default_planned_amount"
     | "recurrence"
   >,
   rangeStartISO: string,
@@ -277,13 +277,13 @@ export function mergeOccurrences(
       };
     }
     const planned =
-      db.planned_amount_paise != null ? db.planned_amount_paise : v.planned_amount_paise;
+      db.planned_amount != null ? db.planned_amount : v.planned_amount;
     return {
       budget_id: v.budget_id,
       period_start: v.period_start,
       due_date: v.due_date,
-      planned_amount_paise: planned,
-      actual_amount_paise: db.actual_amount_paise,
+      planned_amount: planned,
+      actual_amount: db.actual_amount,
       paid_at: db.paid_at,
       note: db.note,
       schedule_status: db.schedule_status,

@@ -1,5 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { parseISODateOnly, toTransactionRow } from "../lib/prismaMappers.js";
+import { toPrismaDecimal } from "../lib/money.js";
 import type { Database, TransactionType } from "../types/database.js";
 import { materializeNextOccurrenceAfterSettled } from "../services/budgetMaterializationService.js";
 
@@ -33,7 +34,7 @@ export class TransactionRepository {
       user_id: row.user_id,
       type: row.type,
       name: row.name,
-      amount_paise: BigInt(row.amount_paise),
+      amount: toPrismaDecimal(row.amount),
       line_status: row.line_status ?? "pending",
       payment_method: row.payment_method ?? "cash",
       occurred_at: parseISODateOnly(row.occurred_at),
@@ -100,17 +101,17 @@ export class TransactionRepository {
           lte: parseISODateOnly(to),
         },
       },
-      select: { type: true, amount_paise: true },
+      select: { type: true, amount: true },
     });
 
     let income = 0;
     let expense = 0;
     for (const r of rows) {
-      const n = Number(r.amount_paise);
+      const n = r.amount.toNumber();
       if (r.type === "income") income += n;
       else expense += n;
     }
-    return { income_paise: income, expense_paise: expense };
+    return { income: income, expense: expense };
   }
 
   async sumExpenseByCategoryInMonth(projectId: string, year: number, monthIndex0: number) {
@@ -128,13 +129,13 @@ export class TransactionRepository {
           lte: parseISODateOnly(to),
         },
       },
-      select: { category_id: true, amount_paise: true },
+      select: { category_id: true, amount: true },
     });
 
     const map = new Map<string | null, number>();
     for (const r of rows) {
       const k = r.category_id;
-      map.set(k, (map.get(k) ?? 0) + Number(r.amount_paise));
+      map.set(k, (map.get(k) ?? 0) + r.amount.toNumber());
     }
     return map;
   }

@@ -24,30 +24,30 @@ export class AnalyticsService {
     const cats = await this.categories.list(projectId);
     const catNames = new Map(cats.map((c) => [c.id, c.name]));
 
-    const category_breakdown = Array.from(byCat.entries()).map(([category_id, amount_paise]) => ({
+    const category_breakdown = Array.from(byCat.entries()).map(([category_id, total]) => ({
       category_id,
       name: category_id ? (catNames.get(category_id) ?? "Unknown") : "Uncategorized",
-      expense_paise: amount_paise,
+      amount: total,
     }));
 
     const budgetList = await this.budgets.list(projectId);
-    let planned_expense_paise = 0;
+    let planned_expense = 0;
     for (const b of budgetList) {
       const virtual = computeOccurrences(b, from, to);
       const dbRows = await this.occurrences.listForBudgetInRange(b.id, from, to);
       const merged = mergeOccurrences(virtual, dbRows);
       for (const o of merged) {
-        planned_expense_paise += o.planned_amount_paise;
+        planned_expense += o.planned_amount;
       }
     }
 
     return {
       month: { year, month: monthIndex0 + 1 },
-      income_paise: sums.income_paise,
-      expense_paise: sums.expense_paise,
-      net_paise: sums.income_paise - sums.expense_paise,
-      planned_expense_paise,
-      planned_vs_actual_variance_paise: planned_expense_paise - sums.expense_paise,
+      income: sums.income,
+      expense: sums.expense,
+      net: sums.income - sums.expense,
+      planned_expense,
+      planned_vs_actual_variance: planned_expense - sums.expense,
       category_breakdown,
     };
   }

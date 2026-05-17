@@ -5,6 +5,7 @@ import { computeOccurrences } from "./budgetOccurrenceService.js";
 import type { BudgetOccurrenceRepository } from "../repositories/budgetOccurrenceRepository.js";
 import { addMonthsUTC, parseISODate, toISODate } from "../utils/dates.js";
 import { parseISODateOnly, toBudgetRow } from "../lib/prismaMappers.js";
+import { toPrismaDecimal } from "../lib/money.js";
 
 /** Persist the first projected budget occurrence (PENDING) after budget creation. */
 export async function materializeFirstOccurrence(
@@ -22,7 +23,7 @@ export async function materializeFirstOccurrence(
     period_start: first.period_start,
     due_date: first.due_date,
     schedule_status: "PENDING",
-    planned_amount_paise: first.planned_amount_paise,
+    planned_amount: first.planned_amount,
   });
 }
 
@@ -71,15 +72,15 @@ export async function materializeNextOccurrenceAfterSettled(
       period_start: period,
       due_date: dueDate,
       schedule_status: "PENDING",
-      planned_amount_paise: BigInt(next.planned_amount_paise),
-      actual_amount_paise: null,
+      planned_amount: toPrismaDecimal(next.planned_amount),
+      actual_amount: null,
       paid_at: null,
       note: null,
     },
     update: {
       due_date: dueDate,
       schedule_status: "PENDING",
-      planned_amount_paise: BigInt(next.planned_amount_paise),
+      planned_amount: toPrismaDecimal(next.planned_amount),
       settled_transaction_id: null,
       projected_transaction_id: null,
     },

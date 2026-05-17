@@ -3,15 +3,14 @@ import type { ClerkUserUpsertInput } from "../lib/clerkUserProfile.js";
 
 export class UserRepository {
   async upsertFromClerk(data: ClerkUserUpsertInput) {
-    const phoneFromClerk = data.phone?.trim() ?? "";
-    const hasClerkPhone = phoneFromClerk.length > 0;
     return prisma.user.upsert({
       where: { id: data.id },
       create: data,
       update: {
         email: data.email,
         email_verified: data.email_verified,
-        ...(hasClerkPhone ? { phone: data.phone } : {}),
+        // Phone is set via PATCH /api/v1/me (onboarding). Do not overwrite from Clerk on
+        // user.updated — Clerk primary phone often lags or differs, which reverted saves.
         first_name: data.first_name,
         last_name: data.last_name,
         username: data.username,

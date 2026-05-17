@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { parseISODateOnly, toBudgetRow } from "../lib/prismaMappers.js";
+import { toPrismaDecimal } from "../lib/money.js";
 import type { Database } from "../types/database.js";
 
 export class BudgetRepository {
@@ -30,7 +31,7 @@ export class BudgetRepository {
         created_by_user_id: createdByUserId,
         category_id: input.category_id,
         title: input.title,
-        default_planned_amount_paise: BigInt(input.default_planned_amount_paise),
+        default_planned_amount: toPrismaDecimal(input.default_planned_amount),
         start_date: parseISODateOnly(input.start_date),
         recurrence_end_date: input.recurrence_end_date
           ? parseISODateOnly(input.recurrence_end_date)
@@ -55,8 +56,8 @@ export class BudgetRepository {
     const data: Prisma.BudgetUncheckedUpdateInput = {};
     if (patch.category_id !== undefined) data.category_id = patch.category_id;
     if (patch.title !== undefined) data.title = patch.title;
-    if (patch.default_planned_amount_paise !== undefined) {
-      data.default_planned_amount_paise = BigInt(patch.default_planned_amount_paise);
+    if (patch.default_planned_amount !== undefined) {
+      data.default_planned_amount = toPrismaDecimal(patch.default_planned_amount);
     }
     if (patch.start_date !== undefined) data.start_date = parseISODateOnly(patch.start_date);
     if (patch.recurrence_end_date !== undefined) {
