@@ -16,7 +16,7 @@ export function categoryController(categories: CategoryRepository, projects: Pro
         return;
       }
       await categories.ensureCanonicalSeed(projectId, p.created_by_user_id);
-      const rows = await categories.list(projectId, p.created_by_user_id);
+      const rows = await categories.list(projectId);
       res.json(rows);
     },
     create: async (req: AuthedRequest, res: Response) => {

@@ -21,7 +21,7 @@ export function summaryController(analytics: AnalyticsService, projects: Project
         res.status(404).json({ error: "Not found" });
         return;
       }
-      const dash = await analytics.monthlyDashboard(projectId, p.created_by_user_id, year, month - 1);
+      const dash = await analytics.monthlyDashboard(projectId, year, month - 1);
       res.json(dash);
     },
   };

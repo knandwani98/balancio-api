@@ -4,8 +4,6 @@ import type { Database } from "../types/database.js";
 import type { CategoryKind } from "@prisma/client";
 import { seedDefaultCategories, seedDefaultGoals } from "../services/projectBootstrapService.js";
 
-const UNASSIGNED_NAME = "unassigned";
-
 export class CategoryRepository {
   /** Idempotent: canonical category list + default goals for migrated/legacy projects. */
   async ensureCanonicalSeed(projectId: string, creatorUserId: string): Promise<void> {
@@ -15,29 +13,7 @@ export class CategoryRepository {
     });
   }
 
-  async ensureUnassigned(projectId: string, creatorUserId: string) {
-    return prisma.category.upsert({
-      where: {
-        project_id_name_kind: {
-          project_id: projectId,
-          name: UNASSIGNED_NAME,
-          kind: "neutral",
-        },
-      },
-      create: {
-        project_id: projectId,
-        name: UNASSIGNED_NAME,
-        icon: "folder",
-        kind: "neutral",
-        created_by_user_id: creatorUserId,
-      },
-      update: {},
-      select: { id: true },
-    });
-  }
-
-  async list(projectId: string, creatorUserIdForUnassigned: string): Promise<Database["public"]["Tables"]["category"]["Row"][]> {
-    await this.ensureUnassigned(projectId, creatorUserIdForUnassigned);
+  async list(projectId: string): Promise<Database["public"]["Tables"]["category"]["Row"][]> {
     const rows = await prisma.category.findMany({
       where: { project_id: projectId },
       orderBy: { name: "asc" },
@@ -50,7 +26,6 @@ export class CategoryRepository {
     actingUserId: string,
     input: { name: string; icon: string; kind: CategoryKind }
   ) {
-    await this.ensureUnassigned(projectId, actingUserId);
     const row = await prisma.category.create({
       data: {
         project_id: projectId,

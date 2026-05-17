@@ -5,20 +5,12 @@ import { DEFAULT_CATEGORIES } from "../data/defaultCategories.js";
 export function categoriesForNestedProjectCreate(
   createdByUserId: string
 ): Prisma.CategoryCreateManyProjectInput[] {
-  return [
-    ...DEFAULT_CATEGORIES.map((c) => ({
-      name: c.name,
-      icon: c.icon,
-      kind: c.type,
-      created_by_user_id: createdByUserId,
-    })),
-    {
-      name: "unassigned",
-      icon: "folder",
-      kind: "neutral",
-      created_by_user_id: createdByUserId,
-    },
-  ];
+  return DEFAULT_CATEGORIES.map((c) => ({
+    name: c.name,
+    icon: c.icon,
+    kind: c.type,
+    created_by_user_id: createdByUserId,
+  }));
 }
 
 export function goalsForNestedProjectCreate(
@@ -33,22 +25,13 @@ export async function seedDefaultCategories(
   creatorUserId: string
 ): Promise<void> {
   await tx.category.createMany({
-    data: [
-      ...DEFAULT_CATEGORIES.map((c) => ({
-        project_id: projectId,
-        name: c.name,
-        icon: c.icon,
-        kind: c.type,
-        created_by_user_id: creatorUserId,
-      })),
-      {
-        project_id: projectId,
-        name: "unassigned",
-        icon: "folder",
-        kind: "neutral",
-        created_by_user_id: creatorUserId,
-      },
-    ],
+    data: DEFAULT_CATEGORIES.map((c) => ({
+      project_id: projectId,
+      name: c.name,
+      icon: c.icon,
+      kind: c.type,
+      created_by_user_id: creatorUserId,
+    })),
     skipDuplicates: true,
   });
 }
