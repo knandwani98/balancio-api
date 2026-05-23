@@ -1,3 +1,12 @@
+/** Digits-only PAN; last 4 used for display labels (full number is not stored). */
+export function getLast4(cardNumber: string): string {
+  const digits = cardNumber.replace(/\D/g, "");
+  if (digits.length < 4) {
+    throw new Error("Card number must have at least 4 digits");
+  }
+  return digits.slice(-4);
+}
+
 /** Detect card network from full PAN in memory only; persist last4 + brand, not full number. */
 export function getCardType(cardNumber: string): string {
   const number = cardNumber.replace(/\s|-/g, "");

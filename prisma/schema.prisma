@@ -53,7 +53,6 @@ enum PaymentMethod {
   cash
   bank
   cards
-  upi
   stocks
   wallet
 }
@@ -64,16 +63,14 @@ enum TransactionLineStatus {
   failed
 }
 
-enum OccurrenceScheduleStatus {
-  PENDING
-  DUE
-  OVERDUE
-  DONE
-}
-
 enum CardAccountType {
   credit
   debit
+}
+
+enum BankAccountType {
+  savings
+  current
 }
 
 enum GoalTenureMode {
@@ -102,9 +99,8 @@ model User {
   budgets_created         Budget[]            @relation("BudgetCreator")
   transactions_created    Transaction[]       @relation("TransactionCreator")
   goals_created           Goal[]              @relation("GoalCreator")
-  bank_accounts           BankAccount[]
+  bank_accounts_created   BankAccount[]       @relation("BankAccountCreator")
   cards                   Card[]
-  upi_profiles            UpiProfile[]
   transactions_owned      Transaction[]       @relation("TransactionOwner")
 
   @@map("user")
@@ -127,7 +123,6 @@ model Project {
   budgets              Budget[]
   transactions         Transaction[]
   goals                Goal[]
-  budget_occurrences   BudgetOccurrence[]
 
   @@index([created_by_user_id])
   @@map("project")
@@ -196,48 +191,24 @@ model Budget {
   default_planned_amount Decimal @db.Decimal(19, 4)
   start_date                   DateTime         @db.Date
   recurrence_end_date          DateTime?        @db.Date
-  due_day_of_month             Int              @db.SmallInt
+  due_day_of_occurence         Int              @db.SmallInt
   recurrence                   BudgetRecurrence @default(monthly)
+  payment_method               PaymentMethod    @default(cash)
+  bank_account_id              String?          @db.Uuid
+  card_id                      String?          @db.Uuid
   created_at                   DateTime         @default(now()) @db.Timestamptz(6)
   updated_at                   DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
 
-  project     Project            @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  created_by  User               @relation("BudgetCreator", fields: [created_by_user_id], references: [id], onDelete: Restrict)
-  category    Category           @relation(fields: [category_id], references: [id], onDelete: Restrict)
-  occurrences BudgetOccurrence[]
+  project      Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  created_by   User          @relation("BudgetCreator", fields: [created_by_user_id], references: [id], onDelete: Restrict)
+  category     Category      @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  bank_account BankAccount?  @relation(fields: [bank_account_id], references: [id], onDelete: SetNull)
+  card         Card?         @relation(fields: [card_id], references: [id], onDelete: SetNull)
+  transactions Transaction[] @relation("BudgetPeriodTransactions")
 
   @@index([project_id])
   @@index([category_id])
   @@map("budget")
-}
-
-model BudgetOccurrence {
-  id                       String                    @id @default(uuid()) @db.Uuid
-  budget_id                String                    @db.Uuid
-  project_id               String                    @db.Uuid
-  period_start             DateTime                  @db.Date
-  due_date                 DateTime                  @db.Date
-  schedule_status          OccurrenceScheduleStatus  @default(PENDING)
-  planned_amount     Decimal? @db.Decimal(19, 4)
-  actual_amount      Decimal? @db.Decimal(19, 4)
-  paid_at                  DateTime?                 @db.Timestamptz(6)
-  note                     String?
-  projected_transaction_id String?                   @db.Uuid
-  settled_transaction_id   String?                   @db.Uuid
-  created_at               DateTime                  @default(now()) @db.Timestamptz(6)
-  updated_at               DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
-
-  budget                Budget       @relation(fields: [budget_id], references: [id], onDelete: Cascade)
-  project               Project      @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  projected_transaction Transaction? @relation("ProjectedOccurrence", fields: [projected_transaction_id], references: [id], onDelete: SetNull)
-  settled_transaction   Transaction? @relation("SettledOccurrence", fields: [settled_transaction_id], references: [id], onDelete: SetNull)
-  transactions          Transaction[]
-
-  @@unique([budget_id, period_start])
-  @@index([budget_id])
-  @@index([project_id])
-  @@index([due_date])
-  @@map("budget_occurrence")
 }
 
 model Transaction {
@@ -251,30 +222,31 @@ model Transaction {
   line_status          TransactionLineStatus  @default(pending)
   payment_method       PaymentMethod          @default(cash)
   occurred_at          DateTime               @db.Date
-  category_id          String?                @db.Uuid
-  note                 String?
-  budget_occurrence_id String?                @db.Uuid
-  bank_account_id      String?                @db.Uuid
-  card_id              String?                @db.Uuid
-  upi_profile_id       String?                @db.Uuid
-  created_at           DateTime               @default(now()) @db.Timestamptz(6)
-  updated_at           DateTime               @default(now()) @updatedAt @db.Timestamptz(6)
+  category_id    String?   @db.Uuid
+  note           String?
+  budget_id      String?   @db.Uuid
+  period_start   DateTime? @db.Date
+  due_date       DateTime? @db.Date
+  bank_account_id String?  @db.Uuid
+  card_id        String?   @db.Uuid
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
-  project            Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  created_by         User                @relation("TransactionCreator", fields: [created_by_user_id], references: [id], onDelete: Restrict)
-  owner              User                @relation("TransactionOwner", fields: [user_id], references: [id], onDelete: Cascade)
-  category           Category?           @relation(fields: [category_id], references: [id], onDelete: SetNull)
-  budget_occurrence  BudgetOccurrence?   @relation(fields: [budget_occurrence_id], references: [id], onDelete: SetNull)
-  bank_account       BankAccount?        @relation(fields: [bank_account_id], references: [id], onDelete: SetNull)
-  card               Card?               @relation(fields: [card_id], references: [id], onDelete: SetNull)
-  upi_profile        UpiProfile?         @relation(fields: [upi_profile_id], references: [id], onDelete: SetNull)
-  projected_for      BudgetOccurrence[]  @relation("ProjectedOccurrence")
-  settled_for        BudgetOccurrence[]  @relation("SettledOccurrence")
+  project    Project      @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  created_by User         @relation("TransactionCreator", fields: [created_by_user_id], references: [id], onDelete: Restrict)
+  owner      User         @relation("TransactionOwner", fields: [user_id], references: [id], onDelete: Cascade)
+  category   Category?    @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  budget     Budget?      @relation("BudgetPeriodTransactions", fields: [budget_id], references: [id], onDelete: Cascade)
+  bank_account BankAccount? @relation(fields: [bank_account_id], references: [id], onDelete: SetNull)
+  card       Card?        @relation(fields: [card_id], references: [id], onDelete: SetNull)
 
+  @@unique([budget_id, period_start])
   @@index([project_id])
   @@index([user_id])
   @@index([occurred_at])
   @@index([category_id])
+  @@index([budget_id])
+  @@index([period_start])
   @@map("transaction")
 }
 
@@ -306,52 +278,43 @@ model Goal {
 }
 
 model BankAccount {
-  id            String   @id @default(uuid()) @db.Uuid
-  user_id       String
-  bank_id       String?
-  bank_name     String
-  nickname      String
-  account_mask  String?
-  icon_url      String?
-  created_at    DateTime @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  id              String          @id @default(uuid()) @db.Uuid
+  createdBy       String          @map("created_by")
+  bank_id         String?
+  bank_name       String
+  nickname        String?
+  account_number  Int
+  account_type    BankAccountType @default(savings)
+  icon_url        String?
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  creator      User          @relation("BankAccountCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   transactions Transaction[]
   goals        Goal[]
+  budgets      Budget[]
 
-  @@index([user_id])
+  @@index([createdBy])
   @@map("bank_account")
 }
 
 model Card {
   id         String          @id @default(uuid()) @db.Uuid
   user_id    String
+  bank_id    String?
+  bank_name  String
   card_type  CardAccountType
   last4      String
   brand      String
   nickname   String?
+  icon_url   String?
   created_at DateTime        @default(now()) @db.Timestamptz(6)
   updated_at DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
 
   user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  budgets      Budget[]
 
   @@index([user_id])
   @@map("card")
-}
-
-model UpiProfile {
-  id         String   @id @default(uuid()) @db.Uuid
-  user_id    String
-  upi_id     String
-  nickname   String
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-
-  user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-
-  @@index([user_id])
-  @@map("upi_profile")
 }

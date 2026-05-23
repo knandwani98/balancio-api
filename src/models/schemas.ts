@@ -18,29 +18,71 @@ export const createTransactionSchema = z.object({
   name: z.string().min(1),
   amount: amountNonNegative,
   line_status: z.enum(["pending", "cleared", "failed"]).optional(),
-  payment_method: z.enum(["cash", "bank", "cards", "upi", "stocks", "wallet"]).optional(),
+  payment_method: z.enum(["cash", "bank", "cards", "stocks", "wallet"]).optional(),
   occurred_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   category_id: z.string().uuid().optional().nullable(),
   note: z.string().optional().nullable(),
-  budget_occurrence_id: z.string().uuid().optional().nullable(),
+  budget_id: z.string().uuid().optional().nullable(),
+  period_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   bank_account_id: z.string().uuid().optional().nullable(),
   card_id: z.string().uuid().optional().nullable(),
-  upi_profile_id: z.string().uuid().optional().nullable(),
 });
 
-export const createBudgetSchema = z.object({
+/** Same fields as create, excluding links not editable from the transactions UI. */
+export const updateTransactionSchema = createTransactionSchema.omit({
+  budget_id: true,
+  period_start: true,
+  due_date: true,
+  bank_account_id: true,
+  card_id: true,
+});
+
+const budgetPaymentMethod = z.enum(["cash", "bank", "cards", "stocks", "wallet"]);
+
+const budgetPaymentRefine = (
+  data: {
+    payment_method?: z.infer<typeof budgetPaymentMethod>;
+    bank_account_id?: string | null;
+    card_id?: string | null;
+  },
+  ctx: z.RefinementCtx
+) => {
+  const pm = data.payment_method ?? "cash";
+  if (pm === "bank" && !data.bank_account_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "bank_account_id required when payment_method is bank",
+      path: ["bank_account_id"],
+    });
+  }
+  if (pm === "cards" && !data.card_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "card_id required when payment_method is cards",
+      path: ["card_id"],
+    });
+  }
+};
+
+const createBudgetSchemaBase = z.object({
   category_id: z.string().uuid(),
   title: z.string().min(1),
   default_planned_amount: amountNonNegative,
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   recurrence_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  due_day_of_month: z.number().int().min(1).max(31),
+  due_day_of_occurence: z.number().int().min(1).max(31),
   recurrence: z
     .enum(["monthly", "yearly", "quarterly", "weekly", "daily", "one_time"])
     .default("monthly"),
+  payment_method: budgetPaymentMethod.optional(),
+  bank_account_id: z.string().uuid().optional().nullable(),
+  card_id: z.string().uuid().optional().nullable(),
 });
 
-export const updateBudgetSchema = createBudgetSchema.partial();
+export const createBudgetSchema = createBudgetSchemaBase.superRefine(budgetPaymentRefine);
+
+export const updateBudgetSchema = createBudgetSchemaBase.partial().superRefine(budgetPaymentRefine);
 
 export const patchOccurrenceSchema = z.object({
   planned_amount: amountNonNegative.optional().nullable(),
@@ -78,18 +120,30 @@ export const createGoalSchema = z.object({
   tenure_mode: z.enum(["infinite", "fixed_days", "aim"]),
   fixed_days: z.number().int().positive().optional().nullable(),
   aim_amount: amountNonNegative.optional().nullable(),
-  source: z.enum(["cash", "bank", "cards", "upi", "stocks", "wallet"]),
+  source: z.enum(["cash", "bank", "cards", "stocks", "wallet"]),
   interest_rate_pa: z.number().optional().nullable(),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   maturity_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   linked_bank_account_id: z.string().uuid().optional().nullable(),
 });
 
+const accountNumberDigits = z
+  .number()
+  .int()
+  .min(1, "account_number must be at least 1")
+  .max(9999, "account_number must be at most 4 digits");
+
 export const createBankAccountSchema = z.object({
   bank_id: z.string().min(1).optional().nullable(),
   bank_name: z.string().min(1),
-  nickname: z.string().min(1),
-  account_mask: z.string().max(32).optional().nullable(),
+  nickname: z
+    .string()
+    .max(128)
+    .optional()
+    .nullable()
+    .transform((s) => (s == null || s.trim() === "" ? null : s.trim())),
+  account_number: accountNumberDigits,
+  account_type: z.enum(["savings", "current"]),
   icon_url: z.string().url().optional().nullable(),
 });
 
@@ -100,25 +154,21 @@ export const updateBankAccountSchema = createBankAccountSchema.partial();
  * with getCardType(); only last4 + brand are stored.
  */
 export const createCardSchema = z.object({
+  bank_id: z.string().min(1).optional().nullable(),
+  bank_name: z.string().min(1),
   card_type: z.enum(["credit", "debit"]),
-  last4: z.string().regex(/^\d{4}$/),
   brand: z.string().min(1).optional(),
   nickname: z.string().optional().nullable(),
-  number_for_brand_detection: z.string().min(12).max(22).optional(),
+  number_for_brand_detection: z.string().min(12).max(22),
 });
 
 export const updateCardSchema = z.object({
+  bank_id: z.string().min(1).optional().nullable(),
+  bank_name: z.string().min(1).optional(),
+  card_type: z.enum(["credit", "debit"]).optional(),
   nickname: z.string().optional().nullable(),
-});
-
-export const createUpiProfileSchema = z.object({
-  upi_id: z.string().min(3),
-  nickname: z.string().min(1),
-});
-
-export const updateUpiProfileSchema = z.object({
-  upi_id: z.string().min(3).optional(),
-  nickname: z.string().min(1).optional(),
+  /** If set, `brand` and `last4` are recomputed from PAN (full number is not stored). */
+  number_for_brand_detection: z.string().min(12).max(22).optional(),
 });
 
 /** Clerk/CDN profile images must parse as URLs; strict `z.string().url()` can reject valid Clerk URLs. */

@@ -3,6 +3,7 @@ import "dotenv/config";
 
 import * as Sentry from "@sentry/node";
 import cors from "cors";
+import { isSentryEnabled } from "./lib/sentryEnabled.js";
 import express from "express";
 import { loadEnv } from "./config/env.js";
 import { clerkAuthMiddleware } from "./middleware/clerkAuth.js";
@@ -10,7 +11,6 @@ import { ensureUserMiddleware } from "./middleware/ensureUser.js";
 import { CategoryRepository } from "./repositories/categoryRepository.js";
 import { TransactionRepository } from "./repositories/transactionRepository.js";
 import { BudgetRepository } from "./repositories/budgetRepository.js";
-import { BudgetOccurrenceRepository } from "./repositories/budgetOccurrenceRepository.js";
 import { GoalRepository } from "./repositories/goalRepository.js";
 import { AnalyticsService } from "./services/analyticsService.js";
 import { apiV1Router } from "./routes/apiV1.js";
@@ -27,11 +27,10 @@ const env = loadEnv();
 const categories = new CategoryRepository();
 const transactions = new TransactionRepository();
 const budgets = new BudgetRepository();
-const occurrences = new BudgetOccurrenceRepository();
 const goals = new GoalRepository();
 const projects = new ProjectRepository();
 const paymentInstruments = new PaymentInstrumentRepository();
-const analytics = new AnalyticsService(budgets, occurrences, transactions, categories);
+const analytics = new AnalyticsService(budgets, transactions, categories);
 
 const userRepo = new UserRepository();
 const clerkUserSync = new ClerkUserSyncService(env, userRepo);
@@ -62,7 +61,7 @@ const internal = internalController(env, budgets);
 /** Cron-friendly stub: GET /internal/due-soon?user_id=<clerk_user_id> — optional X-Cron-Secret or ?secret= if INTERNAL_CRON_SECRET is set. No DB writes. */
 app.get("/internal/due-soon", asyncHandler((req, res) => internal.dueSoon(req, res)));
 
-/** POST /internal/recurring/tick — optional ?date=YYYY-MM-DD (default UTC today). Updates occurrence schedule_status. */
+/** POST /internal/recurring/tick — optional ?date=YYYY-MM-DD (default UTC today). Schedule labels are derived at read time. */
 app.post("/internal/recurring/tick", asyncHandler((req, res) => internal.recurringTick(req, res)));
 
 app.use(
@@ -73,7 +72,6 @@ app.use(
     categories,
     transactions,
     budgets,
-    occurrences,
     analytics,
     projects,
     users: userRepo,
@@ -82,11 +80,12 @@ app.use(
   })
 );
 
-app.get("/debug-sentry", (_req, _res) => {
-  throw new Error("My first Sentry error!");
-});
-
-Sentry.setupExpressErrorHandler(app);
+if (isSentryEnabled) {
+  app.get("/debug-sentry", (_req, _res) => {
+    throw new Error("My first Sentry error!");
+  });
+  Sentry.setupExpressErrorHandler(app);
+}
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

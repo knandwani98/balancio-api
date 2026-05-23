@@ -36,8 +36,11 @@ export class BudgetRepository {
         recurrence_end_date: input.recurrence_end_date
           ? parseISODateOnly(input.recurrence_end_date)
           : null,
-        due_day_of_month: input.due_day_of_month,
+        due_day_of_occurence: input.due_day_of_occurence,
         recurrence: input.recurrence ?? "monthly",
+        payment_method: input.payment_method ?? "cash",
+        bank_account_id: input.bank_account_id ?? null,
+        card_id: input.card_id ?? null,
       },
     });
     return toBudgetRow(row);
@@ -64,8 +67,11 @@ export class BudgetRepository {
       data.recurrence_end_date =
         patch.recurrence_end_date === null ? null : parseISODateOnly(patch.recurrence_end_date);
     }
-    if (patch.due_day_of_month !== undefined) data.due_day_of_month = patch.due_day_of_month;
+    if (patch.due_day_of_occurence !== undefined) data.due_day_of_occurence = patch.due_day_of_occurence;
     if (patch.recurrence !== undefined) data.recurrence = patch.recurrence;
+    if (patch.payment_method !== undefined) data.payment_method = patch.payment_method;
+    if (patch.bank_account_id !== undefined) data.bank_account_id = patch.bank_account_id;
+    if (patch.card_id !== undefined) data.card_id = patch.card_id;
 
     const row = await prisma.budget.update({
       where: { id },

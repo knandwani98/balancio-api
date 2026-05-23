@@ -1,5 +1,4 @@
 import type { BudgetRepository } from "../repositories/budgetRepository.js";
-import type { BudgetOccurrenceRepository } from "../repositories/budgetOccurrenceRepository.js";
 import type { TransactionRepository } from "../repositories/transactionRepository.js";
 import type { CategoryRepository } from "../repositories/categoryRepository.js";
 import { computeOccurrences, mergeOccurrences } from "./budgetOccurrenceService.js";
@@ -8,7 +7,6 @@ import { startOfMonthUTC, toISODate } from "../utils/dates.js";
 export class AnalyticsService {
   constructor(
     private budgets: BudgetRepository,
-    private occurrences: BudgetOccurrenceRepository,
     private transactions: TransactionRepository,
     private categories: CategoryRepository
   ) {}
@@ -34,7 +32,7 @@ export class AnalyticsService {
     let planned_expense = 0;
     for (const b of budgetList) {
       const virtual = computeOccurrences(b, from, to);
-      const dbRows = await this.occurrences.listForBudgetInRange(b.id, from, to);
+      const dbRows = await this.transactions.listBudgetPeriodsInRange(b.id, from, to);
       const merged = mergeOccurrences(virtual, dbRows);
       for (const o of merged) {
         planned_expense += o.planned_amount;

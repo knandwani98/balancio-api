@@ -13,72 +13,88 @@ export const BANK_CATALOG: readonly BankCatalogEntry[] = [
   {
     id: "sbi",
     name: "State Bank of India",
-    logo_url: "https://upload.wikimedia.org/wikipedia/en/5/58/State_Bank_of_India_logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779122220/sbi_cmldbz.png",
   },
   {
     id: "hdfc",
     name: "HDFC Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/2/28/HDFC_Bank_Logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779122991/hdfc_dhqdak.png",
   },
   {
     id: "icici",
     name: "ICICI Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/1/1a/ICICI_Bank_Logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779122218/icici_hr6jdm.png",
   },
   {
     id: "axis",
     name: "Axis Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/en/1/1a/Axis_Bank_logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779120364/axis_xpxmfx.png",
   },
   {
     id: "kotak",
     name: "Kotak Mahindra Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/e/e7/Kotak_Mahindra_Bank_logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779122219/kotak_nlhlco.png",
   },
   {
     id: "pnb",
     name: "Punjab National Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/1/17/Punjab_National_Bank_logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779120792/punjab_kyhqzv.png",
   },
   {
     id: "bob",
     name: "Bank of Baroda",
-    logo_url: "https://upload.wikimedia.org/wikipedia/en/9/9d/Bank_of_Baroda_logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779120365/bob_end2uc.png",
+  },
+  {
+    id: "boi",
+    name: "Bank of India",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779121377/boi_zp6u4z.png",
+    // logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779120365/boi_pzxirt.png",
   },
   {
     id: "canara",
     name: "Canara Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/9/98/Canara_Bank_logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779122907/canara_itk4vd.png",
   },
   {
     id: "union",
     name: "Union Bank of India",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/9/9a/Union_Bank_of_India_Logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779122741/union_xspfqm.png",
   },
   {
     id: "idfc",
     name: "IDFC FIRST Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/8/8a/IDFC_First_Bank_Logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779130809/627ccb991b2e263b45696aa9_kguyqx.png",
   },
   {
     id: "yes",
     name: "Yes Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/9/9d/YES_BANK_logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779120792/yes_brizgl.png",
   },
   {
     id: "indusind",
     name: "IndusInd Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/3/3a/IndusInd_Bank_SVG_Logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779120902/indusind_nztl88.png",
   },
   {
     id: "federal",
     name: "Federal Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/9/9d/Federal_Bank_Logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779120792/federal_qahlvy.png",
   },
   {
     id: "rbl",
     name: "RBL Bank",
-    logo_url: "https://upload.wikimedia.org/wikipedia/commons/5/5a/RBL_Bank_Logo.svg",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779120792/rbl_lvjbvi.png",
+  },
+  {
+    id: "citi",
+    name: "Citibank",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779122218/citi_ckv0ry.png",
+  },
+  {
+    id: "bandhan",
+    name: "Bandhan Bank",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779121108/bandhan_swxms9.png",
   },
 ];
 

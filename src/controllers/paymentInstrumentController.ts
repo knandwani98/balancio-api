@@ -4,12 +4,11 @@ import type { PaymentInstrumentRepository } from "../repositories/paymentInstrum
 import {
   createBankAccountSchema,
   createCardSchema,
-  createUpiProfileSchema,
   updateBankAccountSchema,
   updateCardSchema,
-  updateUpiProfileSchema,
 } from "../models/schemas.js";
-import { getCardType } from "../utils/cardBrand.js";
+import { bankById } from "../data/banks.js";
+import { getCardType, getLast4 } from "../utils/cardBrand.js";
 
 /**
  * User-scoped payment instruments. PCI: full card numbers are not persisted; see createCardSchema
@@ -63,12 +62,13 @@ export function paymentInstrumentController(repo: PaymentInstrumentRepository) {
         return;
       }
       const d = parsed.data;
-      const brand =
-        d.brand ??
-        (d.number_for_brand_detection ? getCardType(d.number_for_brand_detection) : "Unknown");
+      const pan = d.number_for_brand_detection;
+      const brand = d.brand ?? getCardType(pan);
       const row = await repo.createCard(req.userId, {
+        bank_id: d.bank_id ?? null,
+        bank_name: d.bank_name,
         card_type: d.card_type,
-        last4: d.last4,
+        last4: getLast4(pan),
         brand,
         nickname: d.nickname,
       });
@@ -80,7 +80,39 @@ export function paymentInstrumentController(repo: PaymentInstrumentRepository) {
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      const n = await repo.updateCard(req.userId, String(req.params.id), parsed.data);
+      const d = parsed.data;
+      const patch: {
+        bank_id?: string | null;
+        bank_name?: string;
+        card_type?: "credit" | "debit";
+        last4?: string;
+        brand?: string;
+        nickname?: string | null;
+        icon_url?: string | null;
+      } = {};
+      if (d.bank_id !== undefined) {
+        patch.bank_id = d.bank_id ?? null;
+        const catalog = d.bank_id ? bankById(d.bank_id) : undefined;
+        patch.icon_url = catalog?.logo_url ?? null;
+      }
+      if (d.bank_name !== undefined) patch.bank_name = d.bank_name;
+      if (d.card_type !== undefined) patch.card_type = d.card_type;
+      if (d.nickname !== undefined) {
+        patch.nickname =
+          d.nickname == null || (typeof d.nickname === "string" && d.nickname.trim() === "")
+            ? null
+            : String(d.nickname).trim();
+      }
+      if (d.number_for_brand_detection) {
+        const pan = d.number_for_brand_detection;
+        patch.brand = getCardType(pan);
+        patch.last4 = getLast4(pan);
+      }
+      if (Object.keys(patch).length === 0) {
+        res.status(400).json({ error: "No updates" });
+        return;
+      }
+      const n = await repo.updateCard(req.userId, String(req.params.id), patch);
       if (n.count === 0) {
         res.status(404).json({ error: "Not found" });
         return;
@@ -89,41 +121,6 @@ export function paymentInstrumentController(repo: PaymentInstrumentRepository) {
     },
     deleteCard: async (req: AuthedRequest, res: Response) => {
       const n = await repo.deleteCard(req.userId, String(req.params.id));
-      if (n.count === 0) {
-        res.status(404).json({ error: "Not found" });
-        return;
-      }
-      res.status(204).send();
-    },
-
-    listUpi: async (req: AuthedRequest, res: Response) => {
-      const rows = await repo.listUpiProfiles(req.userId);
-      res.json(rows);
-    },
-    createUpi: async (req: AuthedRequest, res: Response) => {
-      const parsed = createUpiProfileSchema.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.flatten() });
-        return;
-      }
-      const row = await repo.createUpiProfile(req.userId, parsed.data);
-      res.status(201).json(row);
-    },
-    updateUpi: async (req: AuthedRequest, res: Response) => {
-      const parsed = updateUpiProfileSchema.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(400).json({ error: parsed.error.flatten() });
-        return;
-      }
-      const n = await repo.updateUpiProfile(req.userId, String(req.params.id), parsed.data);
-      if (n.count === 0) {
-        res.status(404).json({ error: "Not found" });
-        return;
-      }
-      res.json({ ok: true });
-    },
-    deleteUpi: async (req: AuthedRequest, res: Response) => {
-      const n = await repo.deleteUpiProfile(req.userId, String(req.params.id));
       if (n.count === 0) {
         res.status(404).json({ error: "Not found" });
         return;

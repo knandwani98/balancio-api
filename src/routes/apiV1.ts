@@ -12,7 +12,6 @@ import { paymentInstrumentController } from "../controllers/paymentInstrumentCon
 import type { CategoryRepository } from "../repositories/categoryRepository.js";
 import type { TransactionRepository } from "../repositories/transactionRepository.js";
 import type { BudgetRepository } from "../repositories/budgetRepository.js";
-import type { BudgetOccurrenceRepository } from "../repositories/budgetOccurrenceRepository.js";
 import type { AnalyticsService } from "../services/analyticsService.js";
 import type { ProjectRepository } from "../repositories/projectRepository.js";
 import type { UserRepository } from "../repositories/userRepository.js";
@@ -24,7 +23,6 @@ export function apiV1Router(deps: {
   categories: CategoryRepository;
   transactions: TransactionRepository;
   budgets: BudgetRepository;
-  occurrences: BudgetOccurrenceRepository;
   analytics: AnalyticsService;
   projects: ProjectRepository;
   users: UserRepository;
@@ -35,8 +33,8 @@ export function apiV1Router(deps: {
   const proj = projectController(deps.projects, deps.users);
   const prof = userProfileController(deps.users);
   const cat = categoryController(deps.categories, deps.projects);
-  const tx = transactionController(deps.transactions, deps.categories, deps.occurrences, deps.budgets);
-  const bud = budgetController(deps.budgets, deps.occurrences, deps.categories, deps.projects);
+  const tx = transactionController(deps.transactions, deps.categories);
+  const bud = budgetController(deps.budgets, deps.transactions, deps.categories, deps.projects);
   const sum = summaryController(deps.analytics, deps.projects);
   const gl = goalController(deps.goals, deps.categories, deps.projects);
   const pay = paymentInstrumentController(deps.paymentInstruments);
@@ -63,6 +61,14 @@ export function apiV1Router(deps: {
 
   pr.get("/:projectId/transactions", asyncHandler((req, res) => tx.list(req as AuthedRequest, res)));
   pr.post("/:projectId/transactions", asyncHandler((req, res) => tx.create(req as AuthedRequest, res)));
+  pr.patch(
+    "/:projectId/transactions/:transactionId",
+    asyncHandler((req, res) => tx.update(req as AuthedRequest, res))
+  );
+  pr.delete(
+    "/:projectId/transactions/:transactionId",
+    asyncHandler((req, res) => tx.remove(req as AuthedRequest, res))
+  );
 
   pr.get("/:projectId/budgets", asyncHandler((req, res) => bud.list(req as AuthedRequest, res)));
   pr.post("/:projectId/budgets", asyncHandler((req, res) => bud.create(req as AuthedRequest, res)));
@@ -97,11 +103,6 @@ export function apiV1Router(deps: {
   r.post("/cards", asyncHandler((req, res) => pay.createCard(req as AuthedRequest, res)));
   r.patch("/cards/:id", asyncHandler((req, res) => pay.updateCard(req as AuthedRequest, res)));
   r.delete("/cards/:id", asyncHandler((req, res) => pay.deleteCard(req as AuthedRequest, res)));
-
-  r.get("/upi-profiles", asyncHandler((req, res) => pay.listUpi(req as AuthedRequest, res)));
-  r.post("/upi-profiles", asyncHandler((req, res) => pay.createUpi(req as AuthedRequest, res)));
-  r.patch("/upi-profiles/:id", asyncHandler((req, res) => pay.updateUpi(req as AuthedRequest, res)));
-  r.delete("/upi-profiles/:id", asyncHandler((req, res) => pay.deleteUpi(req as AuthedRequest, res)));
 
   r.get("/me/profile-complete", asyncHandler((req, res) => prof.profileComplete(req as AuthedRequest, res)));
   r.get("/me", asyncHandler((req, res) => prof.getMe(req as AuthedRequest, res)));

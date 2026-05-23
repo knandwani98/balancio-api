@@ -3,6 +3,11 @@ export function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Today's calendar date in UTC (YYYY-MM-DD). */
+export function utcTodayISO(): string {
+  return toISODate(new Date());
+}
+
 export function parseISODate(s: string): Date {
   const [y, m, day] = s.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, day));

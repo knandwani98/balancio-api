@@ -1,11 +1,5 @@
-import type {
-  Budget,
-  BudgetOccurrence,
-  Category,
-  Goal,
-  Transaction,
-} from "@prisma/client";
-import type { Database } from "../types/database.js";
+import type { Budget, Category, Goal, Transaction } from "@prisma/client";
+import type { Database, PaymentMethod } from "../types/database.js";
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -34,33 +28,28 @@ export function toBudgetRow(b: Budget): Database["public"]["Tables"]["budget"]["
     default_planned_amount: b.default_planned_amount.toNumber(),
     start_date: isoDate(b.start_date),
     recurrence_end_date: b.recurrence_end_date ? isoDate(b.recurrence_end_date) : null,
-    due_day_of_month: b.due_day_of_month,
+    due_day_of_occurence: b.due_day_of_occurence,
     recurrence: b.recurrence,
+    payment_method: b.payment_method,
+    bank_account_id: b.bank_account_id,
+    card_id: b.card_id,
     created_at: b.created_at.toISOString(),
     updated_at: b.updated_at.toISOString(),
   };
 }
 
-export function toBudgetOccurrenceRow(
-  o: BudgetOccurrence
-): Database["public"]["Tables"]["budget_occurrence"]["Row"] {
+export function budgetPaymentForTransaction(
+  budget: Database["public"]["Tables"]["budget"]["Row"]
+): {
+  payment_method: PaymentMethod;
+  bank_account_id: string | null;
+  card_id: string | null;
+} {
+  const pm = budget.payment_method ?? "cash";
   return {
-    id: o.id,
-    budget_id: o.budget_id,
-    project_id: o.project_id,
-    period_start: isoDate(o.period_start),
-    due_date: isoDate(o.due_date),
-    schedule_status: o.schedule_status,
-    planned_amount:
-      o.planned_amount === null ? null : o.planned_amount.toNumber(),
-    actual_amount:
-      o.actual_amount === null ? null : o.actual_amount.toNumber(),
-    paid_at: o.paid_at ? o.paid_at.toISOString() : null,
-    note: o.note,
-    projected_transaction_id: o.projected_transaction_id,
-    settled_transaction_id: o.settled_transaction_id,
-    created_at: o.created_at.toISOString(),
-    updated_at: o.updated_at.toISOString(),
+    payment_method: pm,
+    bank_account_id: pm === "bank" ? budget.bank_account_id : null,
+    card_id: pm === "cards" ? budget.card_id : null,
   };
 }
 
@@ -103,10 +92,11 @@ export function toTransactionRow(
     occurred_at: isoDate(t.occurred_at),
     category_id: t.category_id,
     note: t.note,
-    budget_occurrence_id: t.budget_occurrence_id,
+    budget_id: t.budget_id,
+    period_start: t.period_start ? isoDate(t.period_start) : null,
+    due_date: t.due_date ? isoDate(t.due_date) : null,
     bank_account_id: t.bank_account_id,
     card_id: t.card_id,
-    upi_profile_id: t.upi_profile_id,
     created_at: t.created_at.toISOString(),
     updated_at: t.updated_at.toISOString(),
   };

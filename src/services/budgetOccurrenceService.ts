@@ -1,4 +1,5 @@
 import type { BudgetRecurrence, Database, OccurrenceScheduleStatus } from "../types/database.js";
+import { deriveScheduleStatus } from "./budgetSchedule.js";
 import {
   addDaysUTC,
   addMonthsUTC,
@@ -11,7 +12,12 @@ import {
 } from "../utils/dates.js";
 
 type BudgetRow = Database["public"]["Tables"]["budget"]["Row"];
-type OccRow = Database["public"]["Tables"]["budget_occurrence"]["Row"];
+/** Budget period persisted as a transaction row (budget_id + period_start). */
+export type BudgetPeriodRow = Database["public"]["Tables"]["transaction"]["Row"] & {
+  budget_id: string;
+  period_start: string;
+  due_date: string;
+};
 
 export type MergedOccurrence = {
   budget_id: string;
@@ -59,7 +65,7 @@ function computeSteppedMonthOccurrences(
     | "id"
     | "start_date"
     | "recurrence_end_date"
-    | "due_day_of_month"
+    | "due_day_of_occurence"
     | "default_planned_amount"
   >,
   rangeStartISO: string,
@@ -97,7 +103,7 @@ function computeSteppedMonthOccurrences(
     const y = d.getUTCFullYear();
     const m = d.getUTCMonth();
     const period_start = toISODate(startOfMonthUTC(y, m));
-    const due = dueDateInMonth(y, m, budget.due_day_of_month);
+    const due = dueDateInMonth(y, m, budget.due_day_of_occurence);
     const due_date = toISODate(due);
     pushOccurrence(budget, period_start, due_date, out);
   }
@@ -111,7 +117,7 @@ function computeWeeklyOccurrences(
     | "id"
     | "start_date"
     | "recurrence_end_date"
-    | "due_day_of_month"
+    | "due_day_of_occurence"
     | "default_planned_amount"
   >,
   rangeStartISO: string,
@@ -135,7 +141,7 @@ function computeWeeklyOccurrences(
     return [];
   }
 
-  const dueOffsetDays = (budget.due_day_of_month - 1) % 7;
+  const dueOffsetDays = (budget.due_day_of_occurence - 1) % 7;
   const out: Omit<MergedOccurrence, "source" | "occurrence_id">[] = [];
 
   let mon = startOfISOWeekMondayUTC(intervalStart);
@@ -200,7 +206,7 @@ function computeOneTimeOccurrences(
     | "id"
     | "start_date"
     | "recurrence_end_date"
-    | "due_day_of_month"
+    | "due_day_of_occurence"
     | "default_planned_amount"
   >,
   rangeStartISO: string,
@@ -215,7 +221,7 @@ function computeOneTimeOccurrences(
   const y = budgetStart.getUTCFullYear();
   const m = budgetStart.getUTCMonth();
   const period_start = toISODate(startOfMonthUTC(y, m));
-  const due_date = toISODate(dueDateInMonth(y, m, budget.due_day_of_month));
+  const due_date = toISODate(dueDateInMonth(y, m, budget.due_day_of_occurence));
   const out: Omit<MergedOccurrence, "source" | "occurrence_id">[] = [];
   pushOccurrence(budget, period_start, due_date, out);
   return out;
@@ -230,7 +236,7 @@ export function computeOccurrences(
     | "id"
     | "start_date"
     | "recurrence_end_date"
-    | "due_day_of_month"
+    | "due_day_of_occurence"
     | "default_planned_amount"
     | "recurrence"
   >,
@@ -260,33 +266,32 @@ export function computeOccurrences(
 
 export function mergeOccurrences(
   virtual: Omit<MergedOccurrence, "source" | "occurrence_id">[],
-  dbRows: OccRow[]
+  dbRows: BudgetPeriodRow[]
 ): MergedOccurrence[] {
-  const byPeriod = new Map<string, OccRow>();
+  const byPeriod = new Map<string, BudgetPeriodRow>();
   for (const r of dbRows) {
-    byPeriod.set(r.period_start, r);
+    if (r.period_start) byPeriod.set(r.period_start, r);
   }
 
   return virtual.map((v) => {
     const db = byPeriod.get(v.period_start);
-    if (!db) {
+    if (!db || !db.due_date) {
       return {
         ...v,
         source: "virtual" as const,
         occurrence_id: null,
       };
     }
-    const planned =
-      db.planned_amount != null ? db.planned_amount : v.planned_amount;
+    const cleared = db.line_status === "cleared";
     return {
       budget_id: v.budget_id,
       period_start: v.period_start,
-      due_date: v.due_date,
-      planned_amount: planned,
-      actual_amount: db.actual_amount,
-      paid_at: db.paid_at,
+      due_date: db.due_date,
+      planned_amount: cleared ? v.planned_amount : db.amount,
+      actual_amount: cleared ? db.amount : null,
+      paid_at: cleared ? `${db.occurred_at}T00:00:00.000Z` : null,
       note: db.note,
-      schedule_status: db.schedule_status,
+      schedule_status: deriveScheduleStatus(db.line_status, db.due_date),
       source: "db",
       occurrence_id: db.id,
     };
