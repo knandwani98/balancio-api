@@ -41,6 +41,7 @@ export class BudgetRepository {
         payment_method: input.payment_method ?? "cash",
         bank_account_id: input.bank_account_id ?? null,
         card_id: input.card_id ?? null,
+        wallet_id: input.wallet_id ?? null,
       },
     });
     return toBudgetRow(row);
@@ -72,6 +73,7 @@ export class BudgetRepository {
     if (patch.payment_method !== undefined) data.payment_method = patch.payment_method;
     if (patch.bank_account_id !== undefined) data.bank_account_id = patch.bank_account_id;
     if (patch.card_id !== undefined) data.card_id = patch.card_id;
+    if (patch.wallet_id !== undefined) data.wallet_id = patch.wallet_id;
 
     const row = await prisma.budget.update({
       where: { id },

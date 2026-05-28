@@ -32,7 +32,7 @@ export class AnalyticsService {
     let planned_expense = 0;
     for (const b of budgetList) {
       const virtual = computeOccurrences(b, from, to);
-      const dbRows = await this.transactions.listBudgetPeriodsInRange(b.id, from, to);
+      const dbRows = await this.transactions.listBudgetOccurrencesInRange(b.id, from, to);
       const merged = mergeOccurrences(virtual, dbRows);
       for (const o of merged) {
         planned_expense += o.planned_amount;

@@ -8,9 +8,9 @@ import type {
   TransactionLineStatus,
   TransactionType,
 } from "../types/database.js";
-import type { BudgetPeriodRow } from "../services/budgetOccurrenceService.js";
+import type { BudgetOccurrenceRow } from "../services/budgetOccurrenceService.js";
 import {
-  materializeNextBudgetPeriodAfterSettled,
+  materializeNextBudgetOccurrenceAfterSettled,
 } from "../services/budgetMaterializationService.js";
 
 export class TransactionRepository {
@@ -36,70 +36,99 @@ export class TransactionRepository {
     return rows.map(toTransactionRow);
   }
 
-  async listBudgetPeriodsInRange(
-    budgetId: string,
-    fromPeriod: string,
-    toPeriod: string
-  ): Promise<BudgetPeriodRow[]> {
-    const rows = await prisma.transaction.findMany({
-      where: {
-        budget_id: budgetId,
-        period_start: {
-          gte: parseISODateOnly(fromPeriod),
-          lte: parseISODateOnly(toPeriod),
-        },
-      },
-      orderBy: { period_start: "asc" },
-    });
+  private mapBudgetOccurrenceRows(
+    rows: Awaited<ReturnType<typeof prisma.transaction.findMany>>
+  ): BudgetOccurrenceRow[] {
     return rows
-      .filter((r): r is typeof r & { budget_id: string; period_start: Date; due_date: Date } =>
-        Boolean(r.budget_id && r.period_start && r.due_date)
+      .filter((r): r is typeof r & { budget_id: string; due_date: Date } =>
+        Boolean(r.budget_id && r.due_date)
       )
       .map((r) => {
         const row = toTransactionRow(r);
         return {
           ...row,
           budget_id: r.budget_id!,
-          period_start: row.period_start!,
           due_date: row.due_date!,
         };
       });
   }
 
-  async getBudgetPeriodByBudgetAndPeriod(budgetId: string, periodStart: string) {
+  async listBudgetOccurrencesInRange(
+    budgetId: string,
+    fromDue: string,
+    toDue: string
+  ): Promise<BudgetOccurrenceRow[]> {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        budget_id: budgetId,
+        due_date: {
+          gte: parseISODateOnly(fromDue),
+          lte: parseISODateOnly(toDue),
+        },
+      },
+      orderBy: { due_date: "asc" },
+    });
+    return this.mapBudgetOccurrenceRows(rows);
+  }
+
+  async listBudgetOccurrencesPaginated(
+    budgetId: string,
+    opts: { from?: string; to?: string; offset: number; limit: number }
+  ): Promise<{ rows: BudgetOccurrenceRow[]; total: number }> {
+    const where: Prisma.TransactionWhereInput = {
+      budget_id: budgetId,
+      due_date: {
+        not: null,
+        ...(opts.from ? { gte: parseISODateOnly(opts.from) } : {}),
+        ...(opts.to ? { lte: parseISODateOnly(opts.to) } : {}),
+      },
+    };
+
+    const [rows, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        orderBy: { due_date: "desc" },
+        skip: opts.offset,
+        take: opts.limit,
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    return { rows: this.mapBudgetOccurrenceRows(rows), total };
+  }
+
+  async getBudgetOccurrenceByBudgetAndDueDate(budgetId: string, dueDate: string) {
     const row = await prisma.transaction.findUnique({
       where: {
-        budget_id_period_start: {
+        budget_id_due_date: {
           budget_id: budgetId,
-          period_start: parseISODateOnly(periodStart),
+          due_date: parseISODateOnly(dueDate),
         },
       },
     });
-    if (!row?.budget_id || !row.period_start || !row.due_date) return null;
+    if (!row?.budget_id || !row.due_date) return null;
     const mapped = toTransactionRow(row);
     return {
       ...mapped,
       budget_id: row.budget_id,
-      period_start: mapped.period_start!,
       due_date: mapped.due_date!,
-    } satisfies BudgetPeriodRow;
+    } satisfies BudgetOccurrenceRow;
   }
 
-  async upsertBudgetPeriod(
+  async upsertBudgetOccurrence(
     budget: Database["public"]["Tables"]["budget"]["Row"],
     projectId: string,
     userId: string,
     transactionType: TransactionType,
     row: {
-      period_start: string;
       due_date: string;
       planned_amount?: number | null;
       actual_amount?: number | null;
       note?: string | null;
       line_status?: TransactionLineStatus;
     }
-  ): Promise<BudgetPeriodRow> {
-    const existing = await this.getBudgetPeriodByBudgetAndPeriod(budget.id, row.period_start);
+  ): Promise<BudgetOccurrenceRow> {
+    const existing = await this.getBudgetOccurrenceByBudgetAndDueDate(budget.id, row.due_date);
     const planned =
       row.planned_amount !== undefined && row.planned_amount !== null
         ? row.planned_amount
@@ -115,16 +144,15 @@ export class TransactionRepository {
     const lineStatus: TransactionLineStatus =
       row.line_status ?? (cleared ? "cleared" : (existing?.line_status ?? "pending"));
     const dueDate = parseISODateOnly(row.due_date);
-    const period = parseISODateOnly(row.period_start);
     const note = row.note !== undefined ? row.note : (existing?.note ?? null);
     const payment = budgetPaymentForTransaction(budget);
 
     const upserted = await prisma.$transaction(async (trx) => {
       const saved = await trx.transaction.upsert({
         where: {
-          budget_id_period_start: {
+          budget_id_due_date: {
             budget_id: budget.id,
-            period_start: period,
+            due_date: dueDate,
           },
         },
         create: {
@@ -140,10 +168,10 @@ export class TransactionRepository {
           category_id: budget.category_id,
           note,
           budget_id: budget.id,
-          period_start: period,
           due_date: dueDate,
           bank_account_id: payment.bank_account_id,
           card_id: payment.card_id,
+          wallet_id: payment.wallet_id,
         },
         update: {
           due_date: dueDate,
@@ -157,11 +185,11 @@ export class TransactionRepository {
       if (lineStatus === "cleared" && existing?.line_status !== "cleared") {
         const budgetEntity = await trx.budget.findUnique({ where: { id: budget.id } });
         if (budgetEntity) {
-          await materializeNextBudgetPeriodAfterSettled(
+          await materializeNextBudgetOccurrenceAfterSettled(
             trx,
             budgetEntity,
             projectId,
-            row.period_start,
+            row.due_date,
             userId,
             transactionType
           );
@@ -175,7 +203,6 @@ export class TransactionRepository {
     return {
       ...mapped,
       budget_id: upserted.budget_id!,
-      period_start: mapped.period_start!,
       due_date: mapped.due_date!,
     };
   }
@@ -194,10 +221,10 @@ export class TransactionRepository {
       category_id: row.category_id ?? null,
       note: row.note ?? null,
       budget_id: row.budget_id ?? null,
-      period_start: row.period_start ? parseISODateOnly(row.period_start) : null,
       due_date: row.due_date ? parseISODateOnly(row.due_date) : null,
       bank_account_id: row.bank_account_id ?? null,
       card_id: row.card_id ?? null,
+      wallet_id: row.wallet_id ?? null,
     };
 
     if (!row.budget_id) {
@@ -208,15 +235,15 @@ export class TransactionRepository {
     const createdRow = await prisma.$transaction(async (trx) => {
       const created = await trx.transaction.create({ data });
 
-      if (created.line_status === "cleared" && created.period_start) {
+      if (created.line_status === "cleared" && created.due_date) {
         const budget = await trx.budget.findUnique({ where: { id: created.budget_id! } });
         if (budget) {
-          const periodIso = created.period_start.toISOString().slice(0, 10);
-          await materializeNextBudgetPeriodAfterSettled(
+          const dueIso = created.due_date.toISOString().slice(0, 10);
+          await materializeNextBudgetOccurrenceAfterSettled(
             trx,
             budget,
             row.project_id,
-            periodIso,
+            dueIso,
             row.user_id,
             row.type
           );
@@ -271,15 +298,15 @@ export class TransactionRepository {
         !wasCleared &&
         nowCleared &&
         row.budget_id &&
-        row.period_start
+        row.due_date
       ) {
         const budget = await trx.budget.findUnique({ where: { id: row.budget_id } });
         if (budget) {
-          await materializeNextBudgetPeriodAfterSettled(
+          await materializeNextBudgetOccurrenceAfterSettled(
             trx,
             budget,
             projectId,
-            row.period_start.toISOString().slice(0, 10),
+            row.due_date.toISOString().slice(0, 10),
             row.user_id,
             row.type
           );

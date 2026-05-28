@@ -4,11 +4,17 @@ import type { BudgetRepository } from "../repositories/budgetRepository.js";
 import type { TransactionRepository } from "../repositories/transactionRepository.js";
 import type { CategoryRepository } from "../repositories/categoryRepository.js";
 import type { ProjectRepository } from "../repositories/projectRepository.js";
-import { computeOccurrences, mergeOccurrences } from "../services/budgetOccurrenceService.js";
+import { parsePaginationQuery } from "../lib/pagination.js";
+import {
+  computeOccurrences,
+  mergeOccurrences,
+  mergedOccurrenceFromDbRow,
+} from "../services/budgetOccurrenceService.js";
 import { backfillBudgetOccurrencesOnCreate } from "../services/budgetMaterializationService.js";
 import type { TransactionType } from "../types/database.js";
 import { createBudgetSchema, patchOccurrenceSchema, updateBudgetSchema } from "../models/schemas.js";
 import { assertProjectMember } from "../lib/projectAuthz.js";
+import { normalizePaymentRefs } from "../lib/normalizePayment.js";
 
 export function budgetController(
   budgets: BudgetRepository,
@@ -47,6 +53,11 @@ export function budgetController(
         return;
       }
       const pm = parsed.data.payment_method ?? "cash";
+      const payment = normalizePaymentRefs(pm, {
+        bank_account_id: parsed.data.bank_account_id,
+        card_id: parsed.data.card_id,
+        wallet_id: parsed.data.wallet_id,
+      });
       const row = await budgets.create(projectId, req.userId, {
         category_id: parsed.data.category_id,
         title: parsed.data.title,
@@ -55,9 +66,7 @@ export function budgetController(
         recurrence_end_date: parsed.data.recurrence_end_date ?? null,
         due_day_of_occurence: parsed.data.due_day_of_occurence,
         recurrence: parsed.data.recurrence,
-        payment_method: pm,
-        bank_account_id: pm === "bank" ? (parsed.data.bank_account_id ?? null) : null,
-        card_id: pm === "cards" ? (parsed.data.card_id ?? null) : null,
+        ...payment,
       });
       const txType: TransactionType = cat.kind === "income" ? "income" : "expense";
       await backfillBudgetOccurrencesOnCreate(row, req.userId, txType);
@@ -79,7 +88,24 @@ export function budgetController(
           return;
         }
       }
-      const row = await budgets.update(projectId, budgetId, parsed.data);
+      const patch = { ...parsed.data };
+      if (
+        patch.payment_method !== undefined ||
+        patch.bank_account_id !== undefined ||
+        patch.card_id !== undefined ||
+        patch.wallet_id !== undefined
+      ) {
+        const pm = patch.payment_method ?? "cash";
+        Object.assign(
+          patch,
+          normalizePaymentRefs(pm, {
+            bank_account_id: patch.bank_account_id,
+            card_id: patch.card_id,
+            wallet_id: patch.wallet_id,
+          })
+        );
+      }
+      const row = await budgets.update(projectId, budgetId, patch);
       if (!row) {
         res.status(404).json({ error: "Not found" });
         return;
@@ -106,16 +132,37 @@ export function budgetController(
         res.status(404).json({ error: "Not found" });
         return;
       }
-      const from = typeof req.query.from === "string" ? req.query.from : undefined;
-      const to = typeof req.query.to === "string" ? req.query.to : undefined;
-      if (!from || !to) {
-        res.status(400).json({ error: "Query params from and to (YYYY-MM-DD) required" });
+      const pagination = parsePaginationQuery(req.query);
+      if ("error" in pagination) {
+        res.status(400).json({ error: pagination.error });
         return;
       }
-      const virtual = computeOccurrences(budget, from, to);
-      const dbRows = await transactions.listBudgetPeriodsInRange(budget.id, from, to);
-      const merged = mergeOccurrences(virtual, dbRows);
-      res.json(merged);
+
+      const from = typeof req.query.from === "string" ? req.query.from : undefined;
+      const to = typeof req.query.to === "string" ? req.query.to : undefined;
+      if (from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+        res.status(400).json({ error: "Invalid from (YYYY-MM-DD)" });
+        return;
+      }
+      if (to && !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+        res.status(400).json({ error: "Invalid to (YYYY-MM-DD)" });
+        return;
+      }
+
+      const { rows, total } = await transactions.listBudgetOccurrencesPaginated(budget.id, {
+        from,
+        to,
+        offset: pagination.offset,
+        limit: pagination.limit,
+      });
+      const items = rows.map((row) => mergedOccurrenceFromDbRow(budget, row));
+      res.json({
+        items,
+        total,
+        page: pagination.page,
+        offset: pagination.offset,
+        limit: pagination.limit,
+      });
     },
     patchOccurrence: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
@@ -128,9 +175,9 @@ export function budgetController(
       const cat = await categories.getById(projectId, budget.category_id);
       const txType: TransactionType = cat?.kind === "income" ? "income" : "expense";
 
-      const periodStart = String(req.params.periodStart);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(periodStart)) {
-        res.status(400).json({ error: "Invalid periodStart" });
+      const dueDate = String(req.params.dueDate);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+        res.status(400).json({ error: "Invalid dueDate" });
         return;
       }
       const parsed = patchOccurrenceSchema.safeParse(req.body);
@@ -138,14 +185,12 @@ export function budgetController(
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      const virtual = computeOccurrences(budget, periodStart, periodStart);
-      const dbRows = await transactions.listBudgetPeriodsInRange(budget.id, periodStart, periodStart);
+      const virtual = computeOccurrences(budget, dueDate, dueDate);
+      const dbRows = await transactions.listBudgetOccurrencesInRange(budget.id, dueDate, dueDate);
       const merged = mergeOccurrences(virtual, dbRows);
-      const hit = merged.find((m) => m.period_start === periodStart);
-      const dueDate = hit?.due_date ?? periodStart;
+      const hit = merged.find((m) => m.due_date === dueDate);
 
-      await transactions.upsertBudgetPeriod(budget, projectId, req.userId, txType, {
-        period_start: periodStart,
+      await transactions.upsertBudgetOccurrence(budget, projectId, req.userId, txType, {
         due_date: dueDate,
         planned_amount: parsed.data.planned_amount,
         actual_amount: parsed.data.actual_amount,
@@ -156,9 +201,9 @@ export function budgetController(
 
       const refreshed = mergeOccurrences(
         virtual,
-        await transactions.listBudgetPeriodsInRange(budget.id, periodStart, periodStart)
+        await transactions.listBudgetOccurrencesInRange(budget.id, dueDate, dueDate)
       );
-      const row = refreshed.find((m) => m.period_start === periodStart);
+      const row = refreshed.find((m) => m.due_date === dueDate);
       res.json(row ?? hit);
     },
   };

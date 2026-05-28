@@ -4,6 +4,7 @@ import type { TransactionRepository } from "../repositories/transactionRepositor
 import type { CategoryRepository } from "../repositories/categoryRepository.js";
 import { createTransactionSchema, updateTransactionSchema } from "../models/schemas.js";
 import { assertProjectMember } from "../lib/projectAuthz.js";
+import { normalizePaymentRefs } from "../lib/normalizePayment.js";
 
 export function transactionController(
   tx: TransactionRepository,
@@ -39,6 +40,12 @@ export function transactionController(
         }
       }
 
+      const pm = body.payment_method ?? "cash";
+      const payment = normalizePaymentRefs(pm, {
+        bank_account_id: body.bank_account_id,
+        card_id: body.card_id,
+        wallet_id: body.wallet_id,
+      });
       const row = await tx.create({
         project_id: projectId,
         created_by_user_id: req.userId,
@@ -47,15 +54,12 @@ export function transactionController(
         name: body.name,
         amount: body.amount,
         line_status: body.line_status ?? "pending",
-        payment_method: body.payment_method ?? "cash",
         occurred_at: body.occurred_at,
         category_id: body.category_id ?? null,
         note: body.note ?? null,
         budget_id: body.budget_id ?? null,
-        period_start: body.period_start ?? null,
         due_date: body.due_date ?? null,
-        bank_account_id: body.bank_account_id ?? null,
-        card_id: body.card_id ?? null,
+        ...payment,
       });
       res.status(201).json(row);
     },

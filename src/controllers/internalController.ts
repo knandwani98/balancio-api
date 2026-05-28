@@ -43,7 +43,6 @@ export function internalController(env: Env, budgets: BudgetRepository) {
         budget_id: string;
         title: string;
         due_date: string;
-        period_start: string;
       }[] = [];
 
       for (const { id: projectId } of projectRows) {
@@ -56,7 +55,6 @@ export function internalController(env: Env, budgets: BudgetRepository) {
               budget_id: b.id,
               title: b.title,
               due_date: o.due_date,
-              period_start: o.period_start,
             });
           }
         }

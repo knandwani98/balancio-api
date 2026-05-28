@@ -33,6 +33,7 @@ export function toBudgetRow(b: Budget): Database["public"]["Tables"]["budget"]["
     payment_method: b.payment_method,
     bank_account_id: b.bank_account_id,
     card_id: b.card_id,
+    wallet_id: b.wallet_id,
     created_at: b.created_at.toISOString(),
     updated_at: b.updated_at.toISOString(),
   };
@@ -44,12 +45,14 @@ export function budgetPaymentForTransaction(
   payment_method: PaymentMethod;
   bank_account_id: string | null;
   card_id: string | null;
+  wallet_id: string | null;
 } {
   const pm = budget.payment_method ?? "cash";
   return {
     payment_method: pm,
     bank_account_id: pm === "bank" ? budget.bank_account_id : null,
     card_id: pm === "cards" ? budget.card_id : null,
+    wallet_id: pm === "wallet" ? budget.wallet_id : null,
   };
 }
 
@@ -93,10 +96,10 @@ export function toTransactionRow(
     category_id: t.category_id,
     note: t.note,
     budget_id: t.budget_id,
-    period_start: t.period_start ? isoDate(t.period_start) : null,
     due_date: t.due_date ? isoDate(t.due_date) : null,
     bank_account_id: t.bank_account_id,
     card_id: t.card_id,
+    wallet_id: t.wallet_id,
     created_at: t.created_at.toISOString(),
     updated_at: t.updated_at.toISOString(),
   };

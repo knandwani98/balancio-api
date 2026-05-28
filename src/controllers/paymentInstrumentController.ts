@@ -4,8 +4,10 @@ import type { PaymentInstrumentRepository } from "../repositories/paymentInstrum
 import {
   createBankAccountSchema,
   createCardSchema,
+  createWalletSchema,
   updateBankAccountSchema,
   updateCardSchema,
+  updateWalletSchema,
 } from "../models/schemas.js";
 import { bankById } from "../data/banks.js";
 import { getCardType, getLast4 } from "../utils/cardBrand.js";
@@ -121,6 +123,41 @@ export function paymentInstrumentController(repo: PaymentInstrumentRepository) {
     },
     deleteCard: async (req: AuthedRequest, res: Response) => {
       const n = await repo.deleteCard(req.userId, String(req.params.id));
+      if (n.count === 0) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      res.status(204).send();
+    },
+
+    listWallets: async (req: AuthedRequest, res: Response) => {
+      const rows = await repo.listWallets(req.userId);
+      res.json(rows);
+    },
+    createWallet: async (req: AuthedRequest, res: Response) => {
+      const parsed = createWalletSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+      const row = await repo.createWallet(req.userId, parsed.data);
+      res.status(201).json(row);
+    },
+    updateWallet: async (req: AuthedRequest, res: Response) => {
+      const parsed = updateWalletSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+      const n = await repo.updateWallet(req.userId, String(req.params.id), parsed.data);
+      if (n.count === 0) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      res.json({ ok: true });
+    },
+    deleteWallet: async (req: AuthedRequest, res: Response) => {
+      const n = await repo.deleteWallet(req.userId, String(req.params.id));
       if (n.count === 0) {
         res.status(404).json({ error: "Not found" });
         return;

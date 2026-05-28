@@ -23,16 +23,15 @@ export const createTransactionSchema = z.object({
   category_id: z.string().uuid().optional().nullable(),
   note: z.string().optional().nullable(),
   budget_id: z.string().uuid().optional().nullable(),
-  period_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   bank_account_id: z.string().uuid().optional().nullable(),
   card_id: z.string().uuid().optional().nullable(),
+  wallet_id: z.string().uuid().optional().nullable(),
 });
 
 /** Same fields as create, excluding links not editable from the transactions UI. */
 export const updateTransactionSchema = createTransactionSchema.omit({
   budget_id: true,
-  period_start: true,
   due_date: true,
   bank_account_id: true,
   card_id: true,
@@ -45,6 +44,7 @@ const budgetPaymentRefine = (
     payment_method?: z.infer<typeof budgetPaymentMethod>;
     bank_account_id?: string | null;
     card_id?: string | null;
+    wallet_id?: string | null;
   },
   ctx: z.RefinementCtx
 ) => {
@@ -63,6 +63,13 @@ const budgetPaymentRefine = (
       path: ["card_id"],
     });
   }
+  if (pm === "wallet" && !data.wallet_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "wallet_id required when payment_method is wallet",
+      path: ["wallet_id"],
+    });
+  }
 };
 
 const createBudgetSchemaBase = z.object({
@@ -73,11 +80,12 @@ const createBudgetSchemaBase = z.object({
   recurrence_end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   due_day_of_occurence: z.number().int().min(1).max(31),
   recurrence: z
-    .enum(["monthly", "yearly", "quarterly", "weekly", "daily", "one_time"])
+    .enum(["monthly", "yearly", "quarterly", "half_yearly", "weekly", "daily", "one_time"])
     .default("monthly"),
   payment_method: budgetPaymentMethod.optional(),
   bank_account_id: z.string().uuid().optional().nullable(),
   card_id: z.string().uuid().optional().nullable(),
+  wallet_id: z.string().uuid().optional().nullable(),
 });
 
 export const createBudgetSchema = createBudgetSchemaBase.superRefine(budgetPaymentRefine);
@@ -170,6 +178,18 @@ export const updateCardSchema = z.object({
   /** If set, `brand` and `last4` are recomputed from PAN (full number is not stored). */
   number_for_brand_detection: z.string().min(12).max(22).optional(),
 });
+
+export const createWalletSchema = z.object({
+  name: z.string().min(1),
+  nickname: z
+    .string()
+    .max(128)
+    .optional()
+    .nullable()
+    .transform((s) => (s == null || s.trim() === "" ? null : s.trim())),
+});
+
+export const updateWalletSchema = createWalletSchema.partial();
 
 /** Clerk/CDN profile images must parse as URLs; strict `z.string().url()` can reject valid Clerk URLs. */
 export const profileImageUrlSchema = z

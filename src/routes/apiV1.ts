@@ -80,7 +80,7 @@ export function apiV1Router(deps: {
     asyncHandler((req, res) => bud.listOccurrences(req as AuthedRequest, res))
   );
   pr.patch(
-    "/:projectId/budgets/:budgetId/occurrences/:periodStart",
+    "/:projectId/budgets/:budgetId/occurrences/:dueDate",
     asyncHandler((req, res) => bud.patchOccurrence(req as AuthedRequest, res))
   );
 
@@ -103,6 +103,11 @@ export function apiV1Router(deps: {
   r.post("/cards", asyncHandler((req, res) => pay.createCard(req as AuthedRequest, res)));
   r.patch("/cards/:id", asyncHandler((req, res) => pay.updateCard(req as AuthedRequest, res)));
   r.delete("/cards/:id", asyncHandler((req, res) => pay.deleteCard(req as AuthedRequest, res)));
+
+  r.get("/wallets", asyncHandler((req, res) => pay.listWallets(req as AuthedRequest, res)));
+  r.post("/wallets", asyncHandler((req, res) => pay.createWallet(req as AuthedRequest, res)));
+  r.patch("/wallets/:id", asyncHandler((req, res) => pay.updateWallet(req as AuthedRequest, res)));
+  r.delete("/wallets/:id", asyncHandler((req, res) => pay.deleteWallet(req as AuthedRequest, res)));
 
   r.get("/me/profile-complete", asyncHandler((req, res) => prof.profileComplete(req as AuthedRequest, res)));
   r.get("/me", asyncHandler((req, res) => prof.getMe(req as AuthedRequest, res)));

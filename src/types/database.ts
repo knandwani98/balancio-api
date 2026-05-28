@@ -3,6 +3,7 @@ export type BudgetRecurrence =
   | "monthly"
   | "yearly"
   | "quarterly"
+  | "half_yearly"
   | "weekly"
   | "daily"
   | "one_time";
@@ -105,6 +106,7 @@ export interface Database {
           payment_method: PaymentMethod;
           bank_account_id: string | null;
           card_id: string | null;
+          wallet_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -122,6 +124,7 @@ export interface Database {
           payment_method?: PaymentMethod;
           bank_account_id?: string | null;
           card_id?: string | null;
+          wallet_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -139,6 +142,7 @@ export interface Database {
           payment_method?: PaymentMethod;
           bank_account_id?: string | null;
           card_id?: string | null;
+          wallet_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -159,10 +163,10 @@ export interface Database {
           category_id: string | null;
           note: string | null;
           budget_id: string | null;
-          period_start: string | null;
           due_date: string | null;
           bank_account_id: string | null;
           card_id: string | null;
+          wallet_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -180,10 +184,10 @@ export interface Database {
           category_id?: string | null;
           note?: string | null;
           budget_id?: string | null;
-          period_start?: string | null;
           due_date?: string | null;
           bank_account_id?: string | null;
           card_id?: string | null;
+          wallet_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -201,10 +205,10 @@ export interface Database {
           category_id?: string | null;
           note?: string | null;
           budget_id?: string | null;
-          period_start?: string | null;
           due_date?: string | null;
           bank_account_id?: string | null;
           card_id?: string | null;
+          wallet_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };

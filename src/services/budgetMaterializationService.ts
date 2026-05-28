@@ -21,8 +21,8 @@ export function occurrencesToSettleOnCreate(
 }
 
 /**
- * On budget create: persist cleared transactions for every period from start_date through today,
- * then materialize the next pending period.
+ * On budget create: persist cleared transactions for every occurrence from start_date through today,
+ * then materialize the next pending occurrence.
  */
 export async function backfillBudgetOccurrencesOnCreate(
   budget: Database["public"]["Tables"]["budget"]["Row"],
@@ -35,7 +35,7 @@ export async function backfillBudgetOccurrencesOnCreate(
 
   await prisma.$transaction(async (trx) => {
     for (const occ of toSettle) {
-      await upsertBudgetPeriodTransaction(trx, budget, userId, transactionType, occ, "cleared");
+      await upsertBudgetOccurrenceTransaction(trx, budget, userId, transactionType, occ, "cleared");
     }
 
     const budgetEntity = await trx.budget.findUnique({ where: { id: budget.id } });
@@ -43,22 +43,22 @@ export async function backfillBudgetOccurrencesOnCreate(
 
     const lastSettled = toSettle[toSettle.length - 1];
     if (lastSettled) {
-      await materializeNextBudgetPeriodAfterSettled(
+      await materializeNextBudgetOccurrenceAfterSettled(
         trx,
         budgetEntity,
         budget.project_id,
-        lastSettled.period_start,
+        lastSettled.due_date,
         userId,
         transactionType
       );
       return;
     }
 
-    await materializeFirstPendingBudgetPeriod(trx, budget, userId, transactionType);
+    await materializeFirstPendingBudgetOccurrence(trx, budget, userId, transactionType);
   });
 }
 
-async function upsertBudgetPeriodTransaction(
+async function upsertBudgetOccurrenceTransaction(
   trx: Prisma.TransactionClient,
   budget: Database["public"]["Tables"]["budget"]["Row"],
   userId: string,
@@ -66,14 +66,13 @@ async function upsertBudgetPeriodTransaction(
   occ: VirtualOccurrence,
   lineStatus: "pending" | "cleared"
 ): Promise<void> {
-  const period = parseISODateOnly(occ.period_start);
   const dueDate = parseISODateOnly(occ.due_date);
 
   const existing = await trx.transaction.findUnique({
     where: {
-      budget_id_period_start: {
+      budget_id_due_date: {
         budget_id: budget.id,
-        period_start: period,
+        due_date: dueDate,
       },
     },
   });
@@ -83,9 +82,9 @@ async function upsertBudgetPeriodTransaction(
 
   await trx.transaction.upsert({
     where: {
-      budget_id_period_start: {
+      budget_id_due_date: {
         budget_id: budget.id,
-        period_start: period,
+        due_date: dueDate,
       },
     },
     create: {
@@ -101,10 +100,10 @@ async function upsertBudgetPeriodTransaction(
       category_id: budget.category_id,
       note: null,
       budget_id: budget.id,
-      period_start: period,
       due_date: dueDate,
       bank_account_id: payment.bank_account_id,
       card_id: payment.card_id,
+      wallet_id: payment.wallet_id,
     },
     update: {
       due_date: dueDate,
@@ -115,7 +114,7 @@ async function upsertBudgetPeriodTransaction(
   });
 }
 
-async function materializeFirstPendingBudgetPeriod(
+async function materializeFirstPendingBudgetOccurrence(
   trx: Prisma.TransactionClient,
   budget: Database["public"]["Tables"]["budget"]["Row"],
   userId: string,
@@ -125,17 +124,17 @@ async function materializeFirstPendingBudgetPeriod(
   const virtual = computeOccurrences(budget, budget.start_date, toISODate(farEnd));
   const first = virtual[0];
   if (!first) return;
-  await upsertBudgetPeriodTransaction(trx, budget, userId, transactionType, first, "pending");
+  await upsertBudgetOccurrenceTransaction(trx, budget, userId, transactionType, first, "pending");
 }
 
 /**
- * After a budget period is cleared, ensure the next period exists as a pending transaction.
+ * After a budget occurrence is cleared, ensure the next occurrence exists as a pending transaction.
  */
-export async function materializeNextBudgetPeriodAfterSettled(
+export async function materializeNextBudgetOccurrenceAfterSettled(
   db: Prisma.TransactionClient,
   budget: Budget,
   projectId: string,
-  settledPeriodStartIso: string,
+  settledDueDateIso: string,
   userId: string,
   transactionType: TransactionType
 ): Promise<void> {
@@ -143,17 +142,16 @@ export async function materializeNextBudgetPeriodAfterSettled(
   const farEnd = addMonthsUTC(parseISODate(budgetRow.start_date), 120);
   const farIso = toISODate(farEnd);
   const virtual = computeOccurrences(budgetRow, budgetRow.start_date, farIso);
-  const next = virtual.find((v) => v.period_start > settledPeriodStartIso);
+  const next = virtual.find((v) => v.due_date > settledDueDateIso);
   if (!next) return;
 
-  const period = parseISODateOnly(next.period_start);
   const dueDate = parseISODateOnly(next.due_date);
 
   const existing = await db.transaction.findUnique({
     where: {
-      budget_id_period_start: {
+      budget_id_due_date: {
         budget_id: budget.id,
-        period_start: period,
+        due_date: dueDate,
       },
     },
   });
@@ -163,9 +161,9 @@ export async function materializeNextBudgetPeriodAfterSettled(
 
   await db.transaction.upsert({
     where: {
-      budget_id_period_start: {
+      budget_id_due_date: {
         budget_id: budget.id,
-        period_start: period,
+        due_date: dueDate,
       },
     },
     create: {
@@ -181,10 +179,10 @@ export async function materializeNextBudgetPeriodAfterSettled(
       category_id: budget.category_id,
       note: null,
       budget_id: budget.id,
-      period_start: period,
       due_date: dueDate,
       bank_account_id: payment.bank_account_id,
       card_id: payment.card_id,
+      wallet_id: payment.wallet_id,
     },
     update: {
       due_date: dueDate,

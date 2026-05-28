@@ -114,4 +114,45 @@ export class PaymentInstrumentRepository {
   deleteCard(userId: string, id: string) {
     return prisma.card.deleteMany({ where: { id, user_id: userId } });
   }
+
+  listWallets(userId: string) {
+    return prisma.wallet.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: "desc" },
+    });
+  }
+
+  createWallet(
+    userId: string,
+    input: {
+      name: string;
+      nickname?: string | null;
+    }
+  ) {
+    return prisma.wallet.create({
+      data: {
+        user_id: userId,
+        name: input.name,
+        nickname: input.nickname ?? null,
+      },
+    });
+  }
+
+  updateWallet(
+    userId: string,
+    id: string,
+    patch: {
+      name?: string;
+      nickname?: string | null;
+    }
+  ) {
+    return prisma.wallet.updateMany({
+      where: { id, user_id: userId },
+      data: patch,
+    });
+  }
+
+  deleteWallet(userId: string, id: string) {
+    return prisma.wallet.deleteMany({ where: { id, user_id: userId } });
+  }
 }

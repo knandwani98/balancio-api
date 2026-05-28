@@ -33,6 +33,12 @@ export function addWeeksUTC(d: Date, n: number): Date {
   return addDaysUTC(d, 7 * n);
 }
 
+/** Monday on or before `iso` (YYYY-MM-DD, UTC). */
+export function mondayOnOrBeforeISO(iso: string): string {
+  const d = parseISODate(iso);
+  return toISODate(startOfISOWeekMondayUTC(d));
+}
+
 /** Monday 00:00 UTC of the ISO week containing `d` (week starts Monday). */
 export function startOfISOWeekMondayUTC(d: Date): Date {
   const dow = d.getUTCDay();
@@ -49,6 +55,3 @@ export function dueDateInMonth(year: number, monthIndex0: number, dueDay: number
   return new Date(Date.UTC(year, monthIndex0, day));
 }
 
-export function periodStartForDate(d: Date): string {
-  return toISODate(startOfMonthUTC(d.getUTCFullYear(), d.getUTCMonth()));
-}
