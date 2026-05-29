@@ -18,6 +18,7 @@ import type { UserRepository } from "../repositories/userRepository.js";
 import type { GoalRepository } from "../repositories/goalRepository.js";
 import type { PaymentInstrumentRepository } from "../repositories/paymentInstrumentRepository.js";
 import { BANK_CATALOG } from "../data/banks.js";
+import { statementUploadMiddleware } from "../middleware/statementUpload.js";
 
 export function apiV1Router(deps: {
   categories: CategoryRepository;
@@ -33,11 +34,11 @@ export function apiV1Router(deps: {
   const proj = projectController(deps.projects, deps.users);
   const prof = userProfileController(deps.users);
   const cat = categoryController(deps.categories, deps.projects);
-  const tx = transactionController(deps.transactions, deps.categories);
+  const tx = transactionController(deps.transactions, deps.categories, deps.paymentInstruments);
   const bud = budgetController(deps.budgets, deps.transactions, deps.categories, deps.projects);
   const sum = summaryController(deps.analytics, deps.projects);
   const gl = goalController(deps.goals, deps.categories, deps.projects);
-  const pay = paymentInstrumentController(deps.paymentInstruments);
+  const pay = paymentInstrumentController(deps.paymentInstruments, deps.transactions);
 
   const pr = Router();
   r.use("/projects", pr);
@@ -59,6 +60,11 @@ export function apiV1Router(deps: {
   pr.get("/:projectId/categories", asyncHandler((req, res) => cat.list(req as AuthedRequest, res)));
   pr.post("/:projectId/categories", asyncHandler((req, res) => cat.create(req as AuthedRequest, res)));
 
+  pr.get(
+    "/:projectId/bank-accounts",
+    asyncHandler((req, res) => pay.listBanksForProject(req as AuthedRequest, res))
+  );
+
   pr.get("/:projectId/transactions", asyncHandler((req, res) => tx.list(req as AuthedRequest, res)));
   pr.post("/:projectId/transactions", asyncHandler((req, res) => tx.create(req as AuthedRequest, res)));
   pr.patch(
@@ -68,6 +74,15 @@ export function apiV1Router(deps: {
   pr.delete(
     "/:projectId/transactions/:transactionId",
     asyncHandler((req, res) => tx.remove(req as AuthedRequest, res))
+  );
+  pr.post(
+    "/:projectId/transactions/import-statement/preview",
+    statementUploadMiddleware,
+    asyncHandler((req, res) => tx.previewImportStatement(req as AuthedRequest, res))
+  );
+  pr.post(
+    "/:projectId/transactions/import-statement/confirm",
+    asyncHandler((req, res) => tx.confirmImportStatement(req as AuthedRequest, res))
   );
 
   pr.get("/:projectId/budgets", asyncHandler((req, res) => bud.list(req as AuthedRequest, res)));

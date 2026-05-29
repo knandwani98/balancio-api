@@ -14,6 +14,72 @@ import {
 } from "../services/budgetMaterializationService.js";
 
 export class TransactionRepository {
+  /** Sum of cleared income − expense on a bank account (no opening baseline). */
+  async computeClearedTransactionNetForBankAccount(
+    bankAccountId: string,
+    projectId?: string
+  ): Promise<number> {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        bank_account_id: bankAccountId,
+        line_status: "cleared",
+        ...(projectId ? { project_id: projectId } : {}),
+      },
+      select: { type: true, amount: true },
+    });
+    return rows.reduce((balance, row) => {
+      const amount = row.amount.toNumber();
+      return balance + (row.type === "income" ? amount : -amount);
+    }, 0);
+  }
+
+  /** Opening baseline on the account + cleared transaction net. */
+  async computeNetBalanceForBankAccount(
+    bankAccountId: string,
+    projectId?: string
+  ): Promise<number> {
+    const account = await prisma.bankAccount.findUnique({
+      where: { id: bankAccountId },
+      select: { current_balance: true },
+    });
+    const baseline = account?.current_balance.toNumber() ?? 0;
+    const txnNet = await this.computeClearedTransactionNetForBankAccount(
+      bankAccountId,
+      projectId
+    );
+    return baseline + txnNet;
+  }
+
+  /** Sum of cleared income − expense on a wallet (no opening baseline). */
+  async computeClearedTransactionNetForWallet(
+    walletId: string,
+    projectId?: string
+  ): Promise<number> {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        wallet_id: walletId,
+        line_status: "cleared",
+        ...(projectId ? { project_id: projectId } : {}),
+      },
+      select: { type: true, amount: true },
+    });
+    return rows.reduce((balance, row) => {
+      const amount = row.amount.toNumber();
+      return balance + (row.type === "income" ? amount : -amount);
+    }, 0);
+  }
+
+  /** Opening baseline on the wallet + cleared transaction net. */
+  async computeNetBalanceForWallet(walletId: string, projectId?: string): Promise<number> {
+    const wallet = await prisma.wallet.findUnique({
+      where: { id: walletId },
+      select: { current_balance: true },
+    });
+    const baseline = wallet?.current_balance.toNumber() ?? 0;
+    const txnNet = await this.computeClearedTransactionNetForWallet(walletId, projectId);
+    return baseline + txnNet;
+  }
+
   async list(
     projectId: string,
     opts: { from?: string; to?: string; type?: TransactionType }
@@ -31,7 +97,11 @@ export class TransactionRepository {
           : {}),
         ...(opts.type ? { type: opts.type } : {}),
       },
-      orderBy: { occurred_at: "desc" },
+      orderBy: [
+        { occurred_at: "desc" },
+        { statement_order: { sort: "desc", nulls: "last" } },
+        { created_at: "desc" },
+      ],
     });
     return rows.map(toTransactionRow);
   }
@@ -220,6 +290,8 @@ export class TransactionRepository {
       occurred_at: parseISODateOnly(row.occurred_at),
       category_id: row.category_id ?? null,
       note: row.note ?? null,
+      reference_details: row.reference_details ?? null,
+      statement_order: row.statement_order ?? null,
       budget_id: row.budget_id ?? null,
       due_date: row.due_date ? parseISODateOnly(row.due_date) : null,
       bank_account_id: row.bank_account_id ?? null,
@@ -256,6 +328,52 @@ export class TransactionRepository {
     return toTransactionRow(createdRow);
   }
 
+  async createMany(
+    rows: Database["public"]["Tables"]["transaction"]["Insert"][],
+    options?: { preserveStatementOrder?: boolean }
+  ): Promise<number> {
+    if (rows.length === 0) return 0;
+
+    const baseCreatedAt = Date.now();
+
+    await prisma.$transaction(async (trx) => {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i]!;
+        await trx.transaction.create({
+          data: {
+            project_id: row.project_id,
+            created_by_user_id: row.created_by_user_id,
+            user_id: row.user_id,
+            type: row.type,
+            name: row.name,
+            amount: toPrismaDecimal(row.amount),
+            line_status: row.line_status ?? "cleared",
+            payment_method: row.payment_method ?? "bank",
+            occurred_at: parseISODateOnly(row.occurred_at),
+            category_id: row.category_id ?? null,
+            note: row.note ?? null,
+            reference_details: row.reference_details ?? null,
+            statement_order: row.statement_order ?? null,
+            budget_id: null,
+            due_date: null,
+            bank_account_id: row.bank_account_id ?? null,
+            card_id: null,
+            wallet_id: null,
+            ...(options?.preserveStatementOrder
+              ? {
+                  created_at: new Date(
+                    baseCreatedAt + (row.statement_order ?? i) * 1000
+                  ),
+                }
+              : {}),
+          },
+        });
+      }
+    });
+
+    return rows.length;
+  }
+
   async update(
     projectId: string,
     id: string,
@@ -268,6 +386,7 @@ export class TransactionRepository {
       occurred_at: string;
       category_id: string | null;
       note: string | null;
+      reference_details?: string | null;
     }
   ) {
     const existing = await prisma.transaction.findFirst({
@@ -291,6 +410,7 @@ export class TransactionRepository {
           occurred_at: parseISODateOnly(body.occurred_at),
           category_id: body.category_id,
           note: body.note,
+          reference_details: body.reference_details ?? null,
         },
       });
 
