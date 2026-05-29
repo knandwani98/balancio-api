@@ -1,11 +1,33 @@
 import { prisma } from "../lib/prisma.js";
 import { bankById } from "../data/banks.js";
+import { toPrismaDecimal } from "../lib/money.js";
 
 export class PaymentInstrumentRepository {
   listBankAccounts(userId: string) {
     return prisma.bankAccount.findMany({
       where: { createdBy: userId },
       orderBy: { created_at: "desc" },
+    });
+  }
+
+  /** User bank accounts that support statement import (Kotak, Bank of India). */
+  listImportableBankAccounts(userId: string) {
+    return prisma.bankAccount.findMany({
+      where: {
+        createdBy: userId,
+        OR: [
+          { bank_id: { in: ["kotak", "boi"] } },
+          { bank_name: { equals: "Kotak Mahindra Bank", mode: "insensitive" } },
+          { bank_name: { equals: "Bank of India", mode: "insensitive" } },
+        ],
+      },
+      orderBy: { created_at: "desc" },
+    });
+  }
+
+  getBankAccountForUser(userId: string, id: string) {
+    return prisma.bankAccount.findFirst({
+      where: { id, createdBy: userId },
     });
   }
 
@@ -17,6 +39,7 @@ export class PaymentInstrumentRepository {
       nickname?: string | null;
       account_number: number;
       account_type: "savings" | "current";
+      current_balance?: number | null;
       icon_url?: string | null;
     }
   ) {
@@ -30,8 +53,19 @@ export class PaymentInstrumentRepository {
         nickname: input.nickname ?? null,
         account_number: input.account_number,
         account_type: input.account_type,
+        ...(input.current_balance !== undefined && input.current_balance !== null
+          ? { current_balance: toPrismaDecimal(input.current_balance) }
+          : {}),
         icon_url,
       },
+    });
+  }
+
+  /** Ledger opening balance (before summed cleared transactions). */
+  setBankAccountLedgerBaseline(userId: string, id: string, baseline: number) {
+    return prisma.bankAccount.updateMany({
+      where: { id, createdBy: userId },
+      data: { current_balance: toPrismaDecimal(baseline) },
     });
   }
 
@@ -44,12 +78,17 @@ export class PaymentInstrumentRepository {
       nickname?: string | null;
       account_number?: number;
       account_type?: "savings" | "current";
+      current_balance?: number | null;
       icon_url?: string | null;
     }
   ) {
+    const data: Record<string, unknown> = { ...patch };
+    if (patch.current_balance !== undefined && patch.current_balance !== null) {
+      data.current_balance = toPrismaDecimal(patch.current_balance);
+    }
     return prisma.bankAccount.updateMany({
       where: { id, createdBy: userId },
-      data: patch,
+      data,
     });
   }
 
@@ -127,6 +166,7 @@ export class PaymentInstrumentRepository {
     input: {
       name: string;
       nickname?: string | null;
+      current_balance?: number;
     }
   ) {
     return prisma.wallet.create({
@@ -134,6 +174,9 @@ export class PaymentInstrumentRepository {
         user_id: userId,
         name: input.name,
         nickname: input.nickname ?? null,
+        ...(input.current_balance !== undefined
+          ? { current_balance: toPrismaDecimal(input.current_balance) }
+          : {}),
       },
     });
   }
@@ -144,11 +187,16 @@ export class PaymentInstrumentRepository {
     patch: {
       name?: string;
       nickname?: string | null;
+      current_balance?: number;
     }
   ) {
+    const data: Record<string, unknown> = { ...patch };
+    if (patch.current_balance !== undefined) {
+      data.current_balance = toPrismaDecimal(patch.current_balance);
+    }
     return prisma.wallet.updateMany({
       where: { id, user_id: userId },
-      data: patch,
+      data,
     });
   }
 

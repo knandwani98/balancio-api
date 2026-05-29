@@ -162,6 +162,8 @@ export interface Database {
           occurred_at: string;
           category_id: string | null;
           note: string | null;
+          reference_details: string | null;
+          statement_order: number | null;
           budget_id: string | null;
           due_date: string | null;
           bank_account_id: string | null;
@@ -183,6 +185,8 @@ export interface Database {
           occurred_at: string;
           category_id?: string | null;
           note?: string | null;
+          reference_details?: string | null;
+          statement_order?: number | null;
           budget_id?: string | null;
           due_date?: string | null;
           bank_account_id?: string | null;
@@ -204,6 +208,8 @@ export interface Database {
           occurred_at?: string;
           category_id?: string | null;
           note?: string | null;
+          reference_details?: string | null;
+          statement_order?: number | null;
           budget_id?: string | null;
           due_date?: string | null;
           bank_account_id?: string | null;

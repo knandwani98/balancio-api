@@ -95,6 +95,8 @@ export function toTransactionRow(
     occurred_at: isoDate(t.occurred_at),
     category_id: t.category_id,
     note: t.note,
+    reference_details: t.reference_details,
+    statement_order: t.statement_order,
     budget_id: t.budget_id,
     due_date: t.due_date ? isoDate(t.due_date) : null,
     bank_account_id: t.bank_account_id,

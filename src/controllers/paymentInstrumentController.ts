@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { AuthedRequest } from "../middleware/clerkAuth.js";
 import type { PaymentInstrumentRepository } from "../repositories/paymentInstrumentRepository.js";
+import type { TransactionRepository } from "../repositories/transactionRepository.js";
 import {
   createBankAccountSchema,
   createCardSchema,
@@ -10,17 +11,44 @@ import {
   updateWalletSchema,
 } from "../models/schemas.js";
 import { bankById } from "../data/banks.js";
+import { toBankAccountRow } from "../lib/bankAccountMapper.js";
+import { toWalletRow } from "../lib/walletMapper.js";
+import { assertProjectMember } from "../lib/projectAuthz.js";
 import { getCardType, getLast4 } from "../utils/cardBrand.js";
 
 /**
  * User-scoped payment instruments. PCI: full card numbers are not persisted; see createCardSchema
  * and getCardType() — only last4 + brand are stored.
  */
-export function paymentInstrumentController(repo: PaymentInstrumentRepository) {
+export function paymentInstrumentController(
+  repo: PaymentInstrumentRepository,
+  transactions: TransactionRepository
+) {
   return {
     listBanks: async (req: AuthedRequest, res: Response) => {
       const rows = await repo.listBankAccounts(req.userId);
-      res.json(rows);
+      const enriched = await Promise.all(
+        rows.map(async (row) => ({
+          ...toBankAccountRow(row),
+          current_balance: await transactions.computeNetBalanceForBankAccount(row.id),
+        }))
+      );
+      res.json(enriched);
+    },
+    listBanksForProject: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
+      const rows = await repo.listImportableBankAccounts(req.userId);
+      const enriched = await Promise.all(
+        rows.map(async (row) => ({
+          ...toBankAccountRow(row),
+          current_balance: await transactions.computeNetBalanceForBankAccount(
+            row.id,
+            projectId
+          ),
+        }))
+      );
+      res.json(enriched);
     },
     createBank: async (req: AuthedRequest, res: Response) => {
       const parsed = createBankAccountSchema.safeParse(req.body);
@@ -29,7 +57,7 @@ export function paymentInstrumentController(repo: PaymentInstrumentRepository) {
         return;
       }
       const row = await repo.createBankAccount(req.userId, parsed.data);
-      res.status(201).json(row);
+      res.status(201).json(toBankAccountRow(row));
     },
     updateBank: async (req: AuthedRequest, res: Response) => {
       const parsed = updateBankAccountSchema.safeParse(req.body);
@@ -132,7 +160,13 @@ export function paymentInstrumentController(repo: PaymentInstrumentRepository) {
 
     listWallets: async (req: AuthedRequest, res: Response) => {
       const rows = await repo.listWallets(req.userId);
-      res.json(rows);
+      const enriched = await Promise.all(
+        rows.map(async (row) => ({
+          ...toWalletRow(row),
+          current_balance: await transactions.computeNetBalanceForWallet(row.id),
+        }))
+      );
+      res.json(enriched);
     },
     createWallet: async (req: AuthedRequest, res: Response) => {
       const parsed = createWalletSchema.safeParse(req.body);
@@ -141,7 +175,7 @@ export function paymentInstrumentController(repo: PaymentInstrumentRepository) {
         return;
       }
       const row = await repo.createWallet(req.userId, parsed.data);
-      res.status(201).json(row);
+      res.status(201).json(toWalletRow(row));
     },
     updateWallet: async (req: AuthedRequest, res: Response) => {
       const parsed = updateWalletSchema.safeParse(req.body);

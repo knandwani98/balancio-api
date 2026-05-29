@@ -13,6 +13,24 @@ export const createCategorySchema = z.object({
   kind: z.enum(["expense", "income", "neutral"]),
 });
 
+export const importStatementLineSchema = z.object({
+  statement_order: z.number().int().nonnegative().optional(),
+  occurred_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  name: z.string().min(1).max(120),
+  reference_no: z.string().max(500).nullable().optional(),
+  type: z.enum(["income", "expense"]),
+  amount: amountNonNegative.refine((n) => n > 0, "amount must be greater than zero"),
+  note: z.string().max(500).nullable().optional(),
+  category_id: z.string().uuid().nullable().optional(),
+});
+
+export const confirmImportStatementSchema = z.object({
+  bank_account_id: z.string().uuid(),
+  lines: z.array(importStatementLineSchema).min(1, "Select at least one transaction"),
+  opening_balance: amountNonNegative.nullable().optional(),
+  closing_balance: amountNonNegative.nullable().optional(),
+});
+
 export const createTransactionSchema = z.object({
   type: z.enum(["income", "expense"]).default("expense"),
   name: z.string().min(1),
@@ -21,7 +39,8 @@ export const createTransactionSchema = z.object({
   payment_method: z.enum(["cash", "bank", "cards", "stocks", "wallet"]).optional(),
   occurred_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   category_id: z.string().uuid().optional().nullable(),
-  note: z.string().optional().nullable(),
+  note: z.string().max(500).optional().nullable(),
+  reference_details: z.string().max(500).optional().nullable(),
   budget_id: z.string().uuid().optional().nullable(),
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
   bank_account_id: z.string().uuid().optional().nullable(),
@@ -152,6 +171,7 @@ export const createBankAccountSchema = z.object({
     .transform((s) => (s == null || s.trim() === "" ? null : s.trim())),
   account_number: accountNumberDigits,
   account_type: z.enum(["savings", "current"]),
+  current_balance: amountNonNegative.optional(),
   icon_url: z.string().url().optional().nullable(),
 });
 
@@ -187,6 +207,7 @@ export const createWalletSchema = z.object({
     .optional()
     .nullable()
     .transform((s) => (s == null || s.trim() === "" ? null : s.trim())),
+  current_balance: amountNonNegative.optional(),
 });
 
 export const updateWalletSchema = createWalletSchema.partial();
