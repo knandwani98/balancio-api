@@ -12,6 +12,7 @@ import { CategoryRepository } from "./repositories/categoryRepository.js";
 import { TransactionRepository } from "./repositories/transactionRepository.js";
 import { BudgetRepository } from "./repositories/budgetRepository.js";
 import { GoalRepository } from "./repositories/goalRepository.js";
+import { InvestmentPlanRepository } from "./repositories/investmentPlanRepository.js";
 import { AnalyticsService } from "./services/analyticsService.js";
 import { apiV1Router } from "./routes/apiV1.js";
 import { internalController } from "./controllers/internalController.js";
@@ -28,6 +29,7 @@ const categories = new CategoryRepository();
 const transactions = new TransactionRepository();
 const budgets = new BudgetRepository();
 const goals = new GoalRepository();
+const investmentPlans = new InvestmentPlanRepository();
 const projects = new ProjectRepository();
 const paymentInstruments = new PaymentInstrumentRepository();
 const analytics = new AnalyticsService(budgets, transactions, categories);
@@ -76,6 +78,7 @@ app.use(
     projects,
     users: userRepo,
     goals,
+    investmentPlans,
     paymentInstruments,
   })
 );

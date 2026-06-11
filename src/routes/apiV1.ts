@@ -7,6 +7,7 @@ import { budgetController } from "../controllers/budgetController.js";
 import { summaryController } from "../controllers/summaryController.js";
 import { projectController } from "../controllers/projectController.js";
 import { goalController } from "../controllers/goalController.js";
+import { investmentPlanController } from "../controllers/investmentPlanController.js";
 import { userProfileController } from "../controllers/userProfileController.js";
 import { paymentInstrumentController } from "../controllers/paymentInstrumentController.js";
 import type { CategoryRepository } from "../repositories/categoryRepository.js";
@@ -16,6 +17,7 @@ import type { AnalyticsService } from "../services/analyticsService.js";
 import type { ProjectRepository } from "../repositories/projectRepository.js";
 import type { UserRepository } from "../repositories/userRepository.js";
 import type { GoalRepository } from "../repositories/goalRepository.js";
+import type { InvestmentPlanRepository } from "../repositories/investmentPlanRepository.js";
 import type { PaymentInstrumentRepository } from "../repositories/paymentInstrumentRepository.js";
 import { BANK_CATALOG } from "../data/banks.js";
 import { statementUploadMiddleware } from "../middleware/statementUpload.js";
@@ -28,6 +30,7 @@ export function apiV1Router(deps: {
   projects: ProjectRepository;
   users: UserRepository;
   goals: GoalRepository;
+  investmentPlans: InvestmentPlanRepository;
   paymentInstruments: PaymentInstrumentRepository;
 }) {
   const r = Router();
@@ -38,6 +41,7 @@ export function apiV1Router(deps: {
   const bud = budgetController(deps.budgets, deps.transactions, deps.categories, deps.projects);
   const sum = summaryController(deps.analytics, deps.projects);
   const gl = goalController(deps.goals, deps.categories, deps.projects);
+  const inv = investmentPlanController(deps.investmentPlans);
   const pay = paymentInstrumentController(deps.paymentInstruments, deps.transactions);
 
   const pr = Router();
@@ -104,6 +108,39 @@ export function apiV1Router(deps: {
   pr.get("/:projectId/goals", asyncHandler((req, res) => gl.list(req as AuthedRequest, res)));
   pr.post("/:projectId/goals", asyncHandler((req, res) => gl.create(req as AuthedRequest, res)));
   pr.delete("/:projectId/goals/:goalId", asyncHandler((req, res) => gl.remove(req as AuthedRequest, res)));
+
+  pr.get(
+    "/:projectId/investment-plans",
+    asyncHandler((req, res) => inv.list(req as AuthedRequest, res))
+  );
+  pr.post(
+    "/:projectId/investment-plans",
+    asyncHandler((req, res) => inv.create(req as AuthedRequest, res))
+  );
+  pr.get(
+    "/:projectId/investment-plans/:planId",
+    asyncHandler((req, res) => inv.get(req as AuthedRequest, res))
+  );
+  pr.patch(
+    "/:projectId/investment-plans/:planId",
+    asyncHandler((req, res) => inv.update(req as AuthedRequest, res))
+  );
+  pr.delete(
+    "/:projectId/investment-plans/:planId",
+    asyncHandler((req, res) => inv.remove(req as AuthedRequest, res))
+  );
+  pr.post(
+    "/:projectId/investment-plans/:planId/points",
+    asyncHandler((req, res) => inv.addPoint(req as AuthedRequest, res))
+  );
+  pr.patch(
+    "/:projectId/investment-plans/:planId/points/:pointId",
+    asyncHandler((req, res) => inv.updatePoint(req as AuthedRequest, res))
+  );
+  pr.delete(
+    "/:projectId/investment-plans/:planId/points/:pointId",
+    asyncHandler((req, res) => inv.removePoint(req as AuthedRequest, res))
+  );
 
   r.get("/banks", (_req, res) => {
     res.json(BANK_CATALOG);

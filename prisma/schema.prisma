@@ -80,6 +80,11 @@ enum GoalTenureMode {
   aim
 }
 
+enum PlanFundInputMode {
+  percentage
+  amount
+}
+
 model User {
   id              String         @id
   email           String?
@@ -100,6 +105,7 @@ model User {
   budgets_created         Budget[]            @relation("BudgetCreator")
   transactions_created    Transaction[]       @relation("TransactionCreator")
   goals_created           Goal[]              @relation("GoalCreator")
+  investment_plans_created InvestmentPlan[]   @relation("InvestmentPlanCreator")
   bank_accounts_created   BankAccount[]       @relation("BankAccountCreator")
   cards                   Card[]
   wallets                 Wallet[]
@@ -125,6 +131,7 @@ model Project {
   budgets              Budget[]
   transactions         Transaction[]
   goals                Goal[]
+  investment_plans     InvestmentPlan[]
 
   @@index([created_by_user_id])
   @@map("project")
@@ -344,4 +351,54 @@ model Wallet {
 
   @@index([user_id])
   @@map("wallet")
+}
+
+model InvestmentPlan {
+  id                 String           @id @default(uuid()) @db.Uuid
+  project_id         String           @db.Uuid
+  created_by_user_id String
+  name               String
+  start_date         DateTime         @db.Date
+  end_date           DateTime?        @db.Date
+  period_amount      Decimal          @db.Decimal(19, 4)
+  frequency          BudgetRecurrence @default(monthly)
+  created_at         DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime         @updatedAt @db.Timestamptz(6)
+
+  project    Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  created_by User                @relation("InvestmentPlanCreator", fields: [created_by_user_id], references: [id], onDelete: Restrict)
+  points     PlanTimelinePoint[]
+
+  @@index([project_id])
+  @@map("investment_plan")
+}
+
+model PlanTimelinePoint {
+  id             String    @id @default(uuid()) @db.Uuid
+  plan_id        String    @db.Uuid
+  effective_from DateTime  @db.Date
+  effective_to   DateTime? @db.Date
+  period_amount  Decimal   @db.Decimal(19, 4)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @updatedAt @db.Timestamptz(6)
+
+  plan  InvestmentPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  funds PlanFund[]
+
+  @@index([plan_id, effective_from])
+  @@map("plan_timeline_point")
+}
+
+model PlanFund {
+  id          String            @id @default(uuid()) @db.Uuid
+  point_id    String            @db.Uuid
+  name        String
+  percentage  Decimal           @db.Decimal(7, 4)
+  input_mode  PlanFundInputMode @default(percentage)
+  sort_order  Int               @default(0)
+
+  point PlanTimelinePoint @relation(fields: [point_id], references: [id], onDelete: Cascade)
+
+  @@index([point_id])
+  @@map("plan_fund")
 }

@@ -140,6 +140,60 @@ export const inviteEmailSchema = z.object({
   email: z.string().email(),
 });
 
+const budgetRecurrenceEnum = z.enum([
+  "monthly",
+  "yearly",
+  "quarterly",
+  "half_yearly",
+  "weekly",
+  "daily",
+  "one_time",
+]);
+
+export const planFundInputSchema = z.object({
+  name: z.string().min(1).max(120),
+  input_mode: z.enum(["percentage", "amount"]),
+  value: amountNonNegative.refine((n) => n > 0, "value must be greater than zero"),
+});
+
+export const createPlanPointBodySchema = z.object({
+  effective_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  period_amount: amountNonNegative.refine((n) => n > 0, "period_amount must be greater than zero"),
+  funds: z.array(planFundInputSchema).min(1, "At least one fund is required"),
+});
+
+export const createInvestmentPlanSchema = z.object({
+  name: z.string().min(1).max(120),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  period_amount: amountNonNegative.refine((n) => n > 0, "period_amount must be greater than zero"),
+  frequency: budgetRecurrenceEnum.default("monthly"),
+  initial_point: z.object({
+    effective_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    funds: z.array(planFundInputSchema).min(1, "At least one fund is required"),
+  }),
+});
+
+export const updateInvestmentPlanSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  period_amount: amountNonNegative
+    .refine((n) => n > 0, "period_amount must be greater than zero")
+    .optional(),
+  frequency: budgetRecurrenceEnum.optional(),
+});
+
+export const createPlanPointSchema = createPlanPointBodySchema;
+
+export const updatePlanPointSchema = z.object({
+  effective_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  period_amount: amountNonNegative
+    .refine((n) => n > 0, "period_amount must be greater than zero")
+    .optional(),
+  funds: z.array(planFundInputSchema).min(1).optional(),
+});
+
 export const createGoalSchema = z.object({
   name: z.string().min(1),
   amount: amountNonNegative,
