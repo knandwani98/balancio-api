@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: balancio-api
+    runtime: node
+    buildCommand: bun run build
+    startCommand: bun start
