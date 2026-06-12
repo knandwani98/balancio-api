@@ -5,3 +5,14 @@ services:
     plan: free
     buildCommand: bun install && bun run build
     startCommand: bun start
+    envVars:
+      - key: FRONTEND_URL
+        value: https://balancio-app.vercel.app
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: INTERNAL_CRON_SECRET
+        sync: false

@@ -7,7 +7,11 @@ const schema = z.object({
   CLERK_WEBHOOK_SIGNING_SECRET: z.string().optional(),
   DATABASE_URL: z.string().min(1),
   DIRECT_URL: z.string().min(1),
-  FRONTEND_URL: z.string().url().default("http://localhost:3000"),
+  FRONTEND_URL: z
+    .string()
+    .url()
+    .transform((url) => url.replace(/\/$/, ""))
+    .default("http://localhost:3000"),
   INTERNAL_CRON_SECRET: z.string().optional(),
 });
 
