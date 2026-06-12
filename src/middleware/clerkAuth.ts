@@ -4,6 +4,15 @@ import type { Env } from "../config/env.js";
 
 export type AuthedRequest = Request & { userId: string };
 
+export type UploadedPdfFile = {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+  size: number;
+};
+
+export type AuthedFileRequest = AuthedRequest & { file?: UploadedPdfFile };
+
 export function clerkAuthMiddleware(env: Env) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const header = req.headers.authorization;

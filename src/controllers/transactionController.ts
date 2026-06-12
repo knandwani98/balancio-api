@@ -1,5 +1,5 @@
 import type { Response } from "express";
-import type { AuthedRequest } from "../middleware/clerkAuth.js";
+import type { AuthedFileRequest, AuthedRequest } from "../middleware/clerkAuth.js";
 import type { TransactionRepository } from "../repositories/transactionRepository.js";
 import type { CategoryRepository } from "../repositories/categoryRepository.js";
 import type { PaymentInstrumentRepository } from "../repositories/paymentInstrumentRepository.js";
@@ -173,7 +173,7 @@ export function transactionController(
       }
       res.status(204).end();
     },
-    previewImportStatement: async (req: AuthedRequest, res: Response) => {
+    previewImportStatement: async (req: AuthedFileRequest, res: Response) => {
       const projectId = String(req.params.projectId);
       await assertProjectMember(req.userId, projectId);
 
