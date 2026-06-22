@@ -154,6 +154,7 @@ export const planFundInputSchema = z.object({
   name: z.string().min(1).max(120),
   input_mode: z.enum(["percentage", "amount"]),
   value: amountNonNegative.refine((n) => n > 0, "value must be greater than zero"),
+  frequency: budgetRecurrenceEnum.default("monthly"),
 });
 
 export const createPlanPointBodySchema = z.object({
@@ -166,12 +167,13 @@ export const createInvestmentPlanSchema = z.object({
   name: z.string().min(1).max(120),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  period_amount: amountNonNegative.refine((n) => n > 0, "period_amount must be greater than zero"),
-  frequency: budgetRecurrenceEnum.default("monthly"),
-  initial_point: z.object({
-    effective_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    funds: z.array(planFundInputSchema).min(1, "At least one fund is required"),
-  }),
+  period_amount: amountNonNegative.default(0),
+  initial_point: z
+    .object({
+      effective_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      funds: z.array(planFundInputSchema).min(1, "At least one fund is required"),
+    })
+    .optional(),
 });
 
 export const updateInvestmentPlanSchema = z.object({
@@ -181,7 +183,6 @@ export const updateInvestmentPlanSchema = z.object({
   period_amount: amountNonNegative
     .refine((n) => n > 0, "period_amount must be greater than zero")
     .optional(),
-  frequency: budgetRecurrenceEnum.optional(),
 });
 
 export const createPlanPointSchema = createPlanPointBodySchema;

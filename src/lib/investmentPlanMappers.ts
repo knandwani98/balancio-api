@@ -36,6 +36,7 @@ export function toPlanFundRow(
     name: f.name,
     percentage,
     input_mode: f.input_mode,
+    frequency: f.frequency,
     computed_amount,
     sort_order: f.sort_order,
   };
@@ -75,7 +76,6 @@ export function toPlanListSummaryRow(
     start_date: isoDate(plan.start_date),
     end_date: plan.end_date ? isoDate(plan.end_date) : null,
     period_amount: currentAmount,
-    frequency: plan.frequency,
     point_count: pointCount,
     created_at: plan.created_at.toISOString(),
     updated_at: plan.updated_at.toISOString(),

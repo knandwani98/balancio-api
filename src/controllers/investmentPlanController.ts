@@ -1,3 +1,4 @@
+import type { BudgetRecurrence } from "@prisma/client";
 import type { Response } from "express";
 import type { AuthedRequest } from "../middleware/clerkAuth.js";
 import type { InvestmentPlanRepository } from "../repositories/investmentPlanRepository.js";
@@ -25,12 +26,18 @@ import {
 } from "../services/planTimelineService.js";
 
 function mapFundInputs(
-  funds: { name: string; input_mode: "percentage" | "amount"; value: number }[]
+  funds: {
+    name: string;
+    input_mode: "percentage" | "amount";
+    value: number;
+    frequency?: BudgetRecurrence;
+  }[]
 ): PlanFundInput[] {
   return funds.map((f) => ({
     name: f.name,
     input_mode: f.input_mode,
     value: f.value,
+    frequency: f.frequency ?? "monthly",
   }));
 }
 
@@ -72,18 +79,36 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
       }
       const d = parsed.data;
       const periodAmount = d.period_amount;
+      const startDate = parseISODateOnly(d.start_date);
+      const endDate = d.end_date ? parseISODateOnly(d.end_date) : null;
+      if (endDate && endDate.getTime() < startDate.getTime()) {
+        res.status(400).json({ error: "End date must be on or after start date" });
+        return;
+      }
+
+      const planFields = {
+        name: d.name,
+        start_date: startDate,
+        end_date: endDate,
+        period_amount: toPrismaDecimal(periodAmount),
+      };
+
+      if (!d.initial_point?.funds?.length) {
+        const plan = await plans.create(projectId, req.userId, planFields);
+        res.status(201).json(toPlanDetailRow(plan));
+        return;
+      }
+
+      if (periodAmount <= 0) {
+        res.status(400).json({ error: "period_amount must be greater than zero when adding funds" });
+        return;
+      }
+
       let normalized;
       try {
         normalized = normalizeAndValidateFunds(periodAmount, mapFundInputs(d.initial_point.funds));
       } catch (e) {
         res.status(400).json({ error: e instanceof Error ? e.message : "Invalid funds" });
-        return;
-      }
-
-      const startDate = parseISODateOnly(d.start_date);
-      const endDate = d.end_date ? parseISODateOnly(d.end_date) : null;
-      if (endDate && endDate.getTime() < startDate.getTime()) {
-        res.status(400).json({ error: "End date must be on or after start date" });
         return;
       }
 
@@ -104,22 +129,11 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
         return;
       }
 
-      const plan = await plans.create(
-        projectId,
-        req.userId,
-        {
-          name: d.name,
-          start_date: startDate,
-          end_date: endDate,
-          period_amount: toPrismaDecimal(periodAmount),
-          frequency: d.frequency,
-        },
-        {
-          effective_from: effectiveFrom,
-          period_amount: toPrismaDecimal(periodAmount),
-          funds: normalized,
-        }
-      );
+      const plan = await plans.create(projectId, req.userId, planFields, {
+        effective_from: effectiveFrom,
+        period_amount: toPrismaDecimal(periodAmount),
+        funds: normalized,
+      });
       res.status(201).json(toPlanDetailRow(plan));
     },
 
@@ -158,7 +172,6 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
         ...(d.period_amount !== undefined && {
           period_amount: toPrismaDecimal(d.period_amount),
         }),
-        ...(d.frequency !== undefined && { frequency: d.frequency }),
       });
       if (!updated) {
         res.status(404).json({ error: "Plan not found" });

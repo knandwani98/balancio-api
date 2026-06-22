@@ -361,7 +361,6 @@ model InvestmentPlan {
   start_date         DateTime         @db.Date
   end_date           DateTime?        @db.Date
   period_amount      Decimal          @db.Decimal(19, 4)
-  frequency          BudgetRecurrence @default(monthly)
   created_at         DateTime         @default(now()) @db.Timestamptz(6)
   updated_at         DateTime         @updatedAt @db.Timestamptz(6)
 
@@ -395,6 +394,7 @@ model PlanFund {
   name        String
   percentage  Decimal           @db.Decimal(7, 4)
   input_mode  PlanFundInputMode @default(percentage)
+  frequency   BudgetRecurrence  @default(monthly)
   sort_order  Int               @default(0)
 
   point PlanTimelinePoint @relation(fields: [point_id], references: [id], onDelete: Cascade)

@@ -1,8 +1,16 @@
-import type { BudgetRecurrence, PlanFundInputMode, Prisma } from "@prisma/client";
+import type { PlanFundInputMode, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import type { NormalizedPlanFund } from "../services/planAllocationMath.js";
 import { toPrismaPercentage } from "../services/planAllocationMath.js";
 import { computeTimelineEffectiveToChain } from "../services/planTimelineService.js";
+
+const fundCreateFields = (f: NormalizedPlanFund, i: number) => ({
+  name: f.name,
+  percentage: toPrismaPercentage(f.percentage),
+  input_mode: f.input_mode,
+  frequency: f.frequency,
+  sort_order: i,
+});
 
 const pointInclude = {
   funds: { orderBy: { sort_order: "asc" as const } },
@@ -48,9 +56,8 @@ export class InvestmentPlanRepository {
       start_date: Date;
       end_date: Date | null;
       period_amount: Prisma.Decimal;
-      frequency: BudgetRecurrence;
     },
-    initialPoint: {
+    initialPoint?: {
       effective_from: Date;
       period_amount: Prisma.Decimal;
       funds: NormalizedPlanFund[];
@@ -65,22 +72,18 @@ export class InvestmentPlanRepository {
           start_date: plan.start_date,
           end_date: plan.end_date,
           period_amount: plan.period_amount,
-          frequency: plan.frequency,
-          points: {
-            create: {
-              effective_from: initialPoint.effective_from,
-              effective_to: plan.end_date,
-              period_amount: initialPoint.period_amount,
-              funds: {
-                create: initialPoint.funds.map((f, i) => ({
-                  name: f.name,
-                  percentage: toPrismaPercentage(f.percentage),
-                  input_mode: f.input_mode,
-                  sort_order: i,
-                })),
+          ...(initialPoint && {
+            points: {
+              create: {
+                effective_from: initialPoint.effective_from,
+                effective_to: plan.end_date,
+                period_amount: initialPoint.period_amount,
+                funds: {
+                  create: initialPoint.funds.map(fundCreateFields),
+                },
               },
             },
-          },
+          }),
         },
         include: planInclude,
       });
@@ -96,7 +99,6 @@ export class InvestmentPlanRepository {
       start_date?: Date;
       end_date?: Date | null;
       period_amount?: Prisma.Decimal;
-      frequency?: BudgetRecurrence;
     }
   ): Promise<PlanWithPoints | null> {
     const existing = await this.getById(projectId, planId);
@@ -151,12 +153,7 @@ export class InvestmentPlanRepository {
           effective_to: plan.end_date,
           period_amount: periodAmount,
           funds: {
-            create: funds.map((f, i) => ({
-              name: f.name,
-              percentage: toPrismaPercentage(f.percentage),
-              input_mode: f.input_mode,
-              sort_order: i,
-            })),
+            create: funds.map(fundCreateFields),
           },
         },
       });
@@ -210,10 +207,7 @@ export class InvestmentPlanRepository {
         await tx.planFund.createMany({
           data: patch.funds.map((f, i) => ({
             point_id: pointId,
-            name: f.name,
-            percentage: toPrismaPercentage(f.percentage),
-            input_mode: f.input_mode,
-            sort_order: i,
+            ...fundCreateFields(f, i),
           })),
         });
       }

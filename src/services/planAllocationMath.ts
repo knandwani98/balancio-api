@@ -1,10 +1,11 @@
 import { Prisma } from "@prisma/client";
-import type { PlanFundInputMode } from "@prisma/client";
+import type { BudgetRecurrence, PlanFundInputMode } from "@prisma/client";
 
 export type PlanFundInput = {
   name: string;
   input_mode: PlanFundInputMode;
   value: number;
+  frequency: BudgetRecurrence;
 };
 
 export type NormalizedPlanFund = {
@@ -12,6 +13,7 @@ export type NormalizedPlanFund = {
   input_mode: PlanFundInputMode;
   percentage: number;
   computed_amount: number;
+  frequency: BudgetRecurrence;
 };
 
 const PERCENT_SUM_TOLERANCE = 0.02;
@@ -46,6 +48,7 @@ export function normalizePlanFund(
     input_mode: item.input_mode,
     percentage,
     computed_amount,
+    frequency: item.frequency,
   };
 }
 
