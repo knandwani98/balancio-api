@@ -134,6 +134,10 @@ export function apiV1Router(deps: {
     asyncHandler((req, res) => inv.removePoint(req as AuthedRequest, res))
   );
   pr.get(
+    "/:projectId/investment-plans/:planId/transactions",
+    asyncHandler((req, res) => inv.listPlanTransactions(req as AuthedRequest, res))
+  );
+  pr.get(
     "/:projectId/investment-plans/:planId/holdings",
     asyncHandler((req, res) => inv.listHoldings(req as AuthedRequest, res))
   );
@@ -164,6 +168,14 @@ export function apiV1Router(deps: {
   pr.post(
     "/:projectId/investment-plans/:planId/holdings/:holdingId/transactions",
     asyncHandler((req, res) => inv.createHoldingTransaction(req as AuthedRequest, res))
+  );
+  pr.patch(
+    "/:projectId/investment-plans/:planId/holdings/:holdingId/transactions/:transactionId",
+    asyncHandler((req, res) => inv.updateHoldingTransaction(req as AuthedRequest, res))
+  );
+  pr.delete(
+    "/:projectId/investment-plans/:planId/holdings/:holdingId/transactions/:transactionId",
+    asyncHandler((req, res) => inv.deleteHoldingTransaction(req as AuthedRequest, res))
   );
 
   r.get("/banks", (_req, res) => {

@@ -213,6 +213,28 @@ export const planFundTypeValues = [
   "other",
 ] as const;
 
+export const planHoldingSortValues = [
+  "default",
+  "name",
+  "invested",
+  "current",
+  "pnl",
+  "pnl_pct",
+] as const;
+
+export const listPlanHoldingsQuerySchema = z.object({
+  sort: z.enum(planHoldingSortValues).optional(),
+  fund_type: z
+    .union([z.enum(planFundTypeValues), z.array(z.enum(planFundTypeValues))])
+    .optional(),
+});
+
+export const planOrderSortValues = ["newest", "oldest"] as const;
+
+export const listPlanOrdersQuerySchema = z.object({
+  sort: z.enum(planOrderSortValues).optional(),
+});
+
 export const planAssetTypeValues = [
   "equity",
   "debt",

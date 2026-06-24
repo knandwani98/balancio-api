@@ -37,7 +37,7 @@ export type PlanListItem = Awaited<ReturnType<InvestmentPlanRepository["list"]>>
 export class InvestmentPlanRepository {
   async list(projectId: string) {
     return prisma.investmentPlan.findMany({
-      where: { project_id: projectId },
+      where: { project_id: projectId, is_tracked: true },
       orderBy: { created_at: "desc" },
       include: {
         points: {
@@ -58,8 +58,17 @@ export class InvestmentPlanRepository {
 
   async getById(projectId: string, planId: string): Promise<PlanWithPoints | null> {
     return prisma.investmentPlan.findFirst({
-      where: { id: planId, project_id: projectId },
+      where: { id: planId, project_id: projectId, is_tracked: true },
       include: planInclude,
+    });
+  }
+
+  async getByName(projectId: string, name: string) {
+    return prisma.investmentPlan.findFirst({
+      where: {
+        project_id: projectId,
+        name: { equals: name, mode: "insensitive" },
+      },
     });
   }
 
@@ -150,6 +159,23 @@ export class InvestmentPlanRepository {
     await prisma.investmentPlan.deleteMany({
       where: { id: planId, project_id: projectId },
     });
+  }
+
+  async untrackPlan(projectId: string, planId: string): Promise<boolean> {
+    const result = await prisma.investmentPlan.updateMany({
+      where: { id: planId, project_id: projectId, is_tracked: true },
+      data: { is_tracked: false },
+    });
+    return result.count > 0;
+  }
+
+  async retrackPlan(projectId: string, planId: string): Promise<PlanWithPoints | null> {
+    const result = await prisma.investmentPlan.updateMany({
+      where: { id: planId, project_id: projectId, is_tracked: false },
+      data: { is_tracked: true },
+    });
+    if (result.count === 0) return null;
+    return this.getById(projectId, planId);
   }
 
   async addPoint(
@@ -302,15 +328,66 @@ export class InvestmentPlanRepository {
     }
   }
 
-  async listHoldings(projectId: string, planId: string) {
+  async listHoldings(
+    projectId: string,
+    planId: string,
+    options?: {
+      sort?: string;
+      fundTypes?: string[];
+    }
+  ) {
     const plan = await prisma.investmentPlan.findFirst({
       where: { id: planId, project_id: projectId },
       select: { id: true },
     });
     if (!plan) return null;
 
+    const where = {
+      plan_id: planId,
+      ...(options?.fundTypes?.length
+        ? { fund_type: { in: options.fundTypes } }
+        : {}),
+    };
+
+    const sort = options?.sort ?? "default";
+
+    if (sort === "name") {
+      return prisma.planHolding.findMany({
+        where,
+        orderBy: { name: "asc" },
+      });
+    }
+
+    if (sort === "invested") {
+      return prisma.planHolding.findMany({
+        where,
+        orderBy: { invested: "desc" },
+      });
+    }
+
+    if (sort === "current") {
+      return prisma.planHolding.findMany({
+        where,
+        orderBy: { current_value: "desc" },
+      });
+    }
+
+    if (sort === "pnl" || sort === "pnl_pct") {
+      const rows = await prisma.planHolding.findMany({ where });
+      return rows.sort((a, b) => {
+        const investedA = a.invested.toNumber();
+        const investedB = b.invested.toNumber();
+        const pnlA = a.current_value.toNumber() - investedA;
+        const pnlB = b.current_value.toNumber() - investedB;
+        if (sort === "pnl") return pnlB - pnlA;
+        const pctA = investedA > 0 ? pnlA / investedA : 0;
+        const pctB = investedB > 0 ? pnlB / investedB : 0;
+        return pctB - pctA;
+      });
+    }
+
     return prisma.planHolding.findMany({
-      where: { plan_id: planId },
+      where,
       orderBy: [{ sort_order: "asc" }, { created_at: "asc" }],
     });
   }
@@ -446,6 +523,34 @@ export class InvestmentPlanRepository {
     return true;
   }
 
+  async listPlanTransactions(
+    projectId: string,
+    planId: string,
+    options: { sort?: "newest" | "oldest" } = {}
+  ) {
+    const plan = await prisma.investmentPlan.findFirst({
+      where: { id: planId, project_id: projectId },
+      select: { id: true },
+    });
+    if (!plan) return null;
+
+    const sort = options.sort ?? "newest";
+    const orderBy =
+      sort === "oldest"
+        ? [{ txn_date: "asc" as const }, { created_at: "asc" as const }]
+        : [{ txn_date: "desc" as const }, { created_at: "desc" as const }];
+
+    return prisma.planHoldingTransaction.findMany({
+      where: { holding: { plan_id: planId } },
+      include: {
+        holding: {
+          select: { id: true, name: true },
+        },
+      },
+      orderBy,
+    });
+  }
+
   async listHoldingTransactions(projectId: string, planId: string, holdingId: string) {
     const holding = await prisma.planHolding.findFirst({
       where: {
@@ -500,25 +605,102 @@ export class InvestmentPlanRepository {
     });
   }
 
+  async updateHoldingTransaction(
+    projectId: string,
+    planId: string,
+    holdingId: string,
+    transactionId: string,
+    data: {
+      txn_date: Date;
+      nav: number;
+      units: number;
+      amount: number;
+      invested: number;
+    }
+  ) {
+    const existing = await prisma.planHoldingTransaction.findFirst({
+      where: {
+        id: transactionId,
+        holding_id: holdingId,
+        holding: { plan: { id: planId, project_id: projectId } },
+      },
+      select: { id: true },
+    });
+    if (!existing) return null;
+
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.planHoldingTransaction.update({
+        where: { id: transactionId },
+        data: {
+          txn_date: data.txn_date,
+          nav: data.nav,
+          units: data.units,
+          amount: data.amount,
+          invested: data.invested,
+        },
+      });
+
+      await this.recalculateHoldingAggregates(holdingId, tx);
+      return updated;
+    });
+  }
+
+  async deleteHoldingTransaction(
+    projectId: string,
+    planId: string,
+    holdingId: string,
+    transactionId: string
+  ) {
+    const existing = await prisma.planHoldingTransaction.findFirst({
+      where: {
+        id: transactionId,
+        holding_id: holdingId,
+        holding: { plan: { id: planId, project_id: projectId } },
+      },
+      select: { id: true },
+    });
+    if (!existing) return false;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.planHoldingTransaction.delete({ where: { id: transactionId } });
+      await this.recalculateHoldingAggregates(holdingId, tx);
+    });
+    return true;
+  }
+
   private async recalculateHoldingAggregates(
     holdingId: string,
     tx: Prisma.TransactionClient
   ) {
+    const holding = await tx.planHolding.findUnique({
+      where: { id: holdingId },
+      select: { current_nav: true },
+    });
+
     const txns = await tx.planHoldingTransaction.findMany({
       where: { holding_id: holdingId },
       orderBy: [{ txn_date: "desc" }, { created_at: "desc" }],
     });
 
-    const totalInvested = txns.reduce((sum, row) => sum + row.invested.toNumber(), 0);
+    const totalInvestedAmount = txns.reduce(
+      (sum, row) => sum + row.amount.toNumber(),
+      0
+    );
     const totalUnits = txns.reduce((sum, row) => sum + row.units.toNumber(), 0);
-    const latestNav = txns[0]?.nav.toNumber() ?? 0;
+    const latestTxnNav = txns[0]?.nav.toNumber() ?? 0;
+    const navForValue =
+      holding?.current_nav != null && holding.current_nav.toNumber() > 0
+        ? holding.current_nav.toNumber()
+        : latestTxnNav;
     const currentValue =
-      totalUnits > 0 && latestNav > 0 ? totalUnits * latestNav : totalInvested;
+      totalUnits > 0 && navForValue > 0
+        ? totalUnits * navForValue
+        : totalInvestedAmount;
 
     await tx.planHolding.update({
       where: { id: holdingId },
       data: {
-        invested: totalInvested,
+        invested: totalInvestedAmount,
         current_value: currentValue,
       },
     });

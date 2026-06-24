@@ -13,3 +13,12 @@ export function toPlanHoldingTransactionRow(t: PlanHoldingTransaction) {
     updated_at: t.updated_at.toISOString(),
   };
 }
+
+export function toPlanOrderTransactionRow(
+  t: PlanHoldingTransaction & { holding: { id: string; name: string } }
+) {
+  return {
+    ...toPlanHoldingTransactionRow(t),
+    holding_name: t.holding.name,
+  };
+}

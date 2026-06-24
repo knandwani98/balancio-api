@@ -7,6 +7,8 @@ import {
   createPlanHoldingSchema,
   createPlanHoldingTransactionSchema,
   createPlanPointSchema,
+  listPlanHoldingsQuerySchema,
+  listPlanOrdersQuerySchema,
   patchPlanHoldingCurrentNavSchema,
   updateInvestmentPlanSchema,
   updatePlanHoldingSchema,
@@ -19,7 +21,10 @@ import { toPlanDetailRow, toPlanListSummaryRow } from "../lib/investmentPlanMapp
 import { normalizePlanHoldingAsset } from "../lib/planHoldingAsset.js";
 import { normalizePlanHoldingBroker } from "../lib/planHoldingBroker.js";
 import { toPlanHoldingRow } from "../lib/planHoldingMappers.js";
-import { toPlanHoldingTransactionRow } from "../lib/planHoldingTransactionMappers.js";
+import {
+  toPlanHoldingTransactionRow,
+  toPlanOrderTransactionRow,
+} from "../lib/planHoldingTransactionMappers.js";
 import {
   normalizeAndValidateFunds,
   type PlanFundInput,
@@ -97,6 +102,21 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
       const endDate = d.end_date ? parseISODateOnly(d.end_date) : null;
       if (endDate && endDate.getTime() < startDate.getTime()) {
         res.status(400).json({ error: "End date must be on or after start date" });
+        return;
+      }
+
+      const existingByName = await plans.getByName(projectId, d.name);
+      if (existingByName?.is_tracked) {
+        res.status(409).json({ error: "This category is already tracked" });
+        return;
+      }
+      if (existingByName && !existingByName.is_tracked) {
+        const retracked = await plans.retrackPlan(projectId, existingByName.id);
+        if (!retracked) {
+          res.status(404).json({ error: "Plan not found" });
+          return;
+        }
+        res.json(toPlanDetailRow(retracked));
         return;
       }
 
@@ -198,7 +218,11 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
       const projectId = String(req.params.projectId);
       const planId = String(req.params.planId);
       await assertProjectMember(req.userId, projectId);
-      await plans.deletePlan(projectId, planId);
+      const untracked = await plans.untrackPlan(projectId, planId);
+      if (!untracked) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
       res.status(204).send();
     },
 
@@ -344,7 +368,22 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
       const planId = String(req.params.planId);
       await assertProjectMember(req.userId, projectId);
 
-      const rows = await plans.listHoldings(projectId, planId);
+      const parsed = listPlanHoldingsQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      const fundTypes = parsed.data.fund_type
+        ? Array.isArray(parsed.data.fund_type)
+          ? parsed.data.fund_type
+          : [parsed.data.fund_type]
+        : undefined;
+
+      const rows = await plans.listHoldings(projectId, planId, {
+        sort: parsed.data.sort,
+        fundTypes,
+      });
       if (!rows) {
         res.status(404).json({ error: "Plan not found" });
         return;
@@ -491,6 +530,27 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
       res.status(204).send();
     },
 
+    listPlanTransactions: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      await assertProjectMember(req.userId, projectId);
+
+      const parsed = listPlanOrdersQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      const rows = await plans.listPlanTransactions(projectId, planId, {
+        sort: parsed.data.sort,
+      });
+      if (!rows) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
+      res.json(rows.map(toPlanOrderTransactionRow));
+    },
+
     listHoldingTransactions: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
       const planId = String(req.params.planId);
@@ -529,6 +589,59 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
         return;
       }
       res.status(201).json(toPlanHoldingTransactionRow(row));
+    },
+
+    updateHoldingTransaction: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      const holdingId = String(req.params.holdingId);
+      const transactionId = String(req.params.transactionId);
+      await assertProjectMember(req.userId, projectId);
+
+      const parsed = createPlanHoldingTransactionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      const row = await plans.updateHoldingTransaction(
+        projectId,
+        planId,
+        holdingId,
+        transactionId,
+        {
+          txn_date: parseISODateOnly(parsed.data.txn_date),
+          nav: parsed.data.nav,
+          units: parsed.data.units,
+          amount: parsed.data.amount,
+          invested: parsed.data.invested,
+        }
+      );
+      if (!row) {
+        res.status(404).json({ error: "Transaction not found" });
+        return;
+      }
+      res.json(toPlanHoldingTransactionRow(row));
+    },
+
+    deleteHoldingTransaction: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      const holdingId = String(req.params.holdingId);
+      const transactionId = String(req.params.transactionId);
+      await assertProjectMember(req.userId, projectId);
+
+      const deleted = await plans.deleteHoldingTransaction(
+        projectId,
+        planId,
+        holdingId,
+        transactionId
+      );
+      if (!deleted) {
+        res.status(404).json({ error: "Transaction not found" });
+        return;
+      }
+      res.status(204).send();
     },
   };
 }
