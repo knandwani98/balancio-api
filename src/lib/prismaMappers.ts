@@ -1,4 +1,4 @@
-import type { Budget, Category, Goal, Transaction } from "@prisma/client";
+import type { Budget, Category, Transaction } from "@prisma/client";
 import type { Database, PaymentMethod } from "../types/database.js";
 
 function isoDate(d: Date): string {
@@ -53,29 +53,6 @@ export function budgetPaymentForTransaction(
     bank_account_id: pm === "bank" ? budget.bank_account_id : null,
     card_id: pm === "cards" ? budget.card_id : null,
     wallet_id: pm === "wallet" ? budget.wallet_id : null,
-  };
-}
-
-/** JSON-serializable goal row (BigInt / Decimal → number). */
-export function toGoalRow(g: Goal) {
-  return {
-    id: g.id,
-    project_id: g.project_id,
-    created_by_user_id: g.created_by_user_id,
-    name: g.name,
-    amount: g.amount.toNumber(),
-    frequency: g.frequency,
-    tenure_mode: g.tenure_mode,
-    fixed_days: g.fixed_days,
-    aim_amount: g.aim_amount == null ? null : g.aim_amount.toNumber(),
-    source: g.source,
-    interest_rate_pa: g.interest_rate_pa != null ? Number(g.interest_rate_pa) : null,
-    start_date: g.start_date ? isoDate(g.start_date) : null,
-    maturity_date: g.maturity_date ? isoDate(g.maturity_date) : null,
-    linked_bank_account_id: g.linked_bank_account_id,
-    is_archived: g.is_archived,
-    created_at: g.created_at.toISOString(),
-    updated_at: g.updated_at.toISOString(),
   };
 }
 

@@ -6,7 +6,6 @@ import { transactionController } from "../controllers/transactionController.js";
 import { budgetController } from "../controllers/budgetController.js";
 import { summaryController } from "../controllers/summaryController.js";
 import { projectController } from "../controllers/projectController.js";
-import { goalController } from "../controllers/goalController.js";
 import { investmentPlanController } from "../controllers/investmentPlanController.js";
 import { userProfileController } from "../controllers/userProfileController.js";
 import { paymentInstrumentController } from "../controllers/paymentInstrumentController.js";
@@ -16,7 +15,6 @@ import type { BudgetRepository } from "../repositories/budgetRepository.js";
 import type { AnalyticsService } from "../services/analyticsService.js";
 import type { ProjectRepository } from "../repositories/projectRepository.js";
 import type { UserRepository } from "../repositories/userRepository.js";
-import type { GoalRepository } from "../repositories/goalRepository.js";
 import type { InvestmentPlanRepository } from "../repositories/investmentPlanRepository.js";
 import type { PaymentInstrumentRepository } from "../repositories/paymentInstrumentRepository.js";
 import { BANK_CATALOG } from "../data/banks.js";
@@ -29,7 +27,6 @@ export function apiV1Router(deps: {
   analytics: AnalyticsService;
   projects: ProjectRepository;
   users: UserRepository;
-  goals: GoalRepository;
   investmentPlans: InvestmentPlanRepository;
   paymentInstruments: PaymentInstrumentRepository;
 }) {
@@ -40,7 +37,6 @@ export function apiV1Router(deps: {
   const tx = transactionController(deps.transactions, deps.categories, deps.paymentInstruments);
   const bud = budgetController(deps.budgets, deps.transactions, deps.categories, deps.projects);
   const sum = summaryController(deps.analytics, deps.projects);
-  const gl = goalController(deps.goals, deps.categories, deps.projects);
   const inv = investmentPlanController(deps.investmentPlans);
   const pay = paymentInstrumentController(deps.paymentInstruments, deps.transactions);
 
@@ -105,10 +101,6 @@ export function apiV1Router(deps: {
 
   pr.get("/:projectId/summary", asyncHandler((req, res) => sum.get(req as AuthedRequest, res)));
 
-  pr.get("/:projectId/goals", asyncHandler((req, res) => gl.list(req as AuthedRequest, res)));
-  pr.post("/:projectId/goals", asyncHandler((req, res) => gl.create(req as AuthedRequest, res)));
-  pr.delete("/:projectId/goals/:goalId", asyncHandler((req, res) => gl.remove(req as AuthedRequest, res)));
-
   pr.get(
     "/:projectId/investment-plans",
     asyncHandler((req, res) => inv.list(req as AuthedRequest, res))
@@ -140,6 +132,38 @@ export function apiV1Router(deps: {
   pr.delete(
     "/:projectId/investment-plans/:planId/points/:pointId",
     asyncHandler((req, res) => inv.removePoint(req as AuthedRequest, res))
+  );
+  pr.get(
+    "/:projectId/investment-plans/:planId/holdings",
+    asyncHandler((req, res) => inv.listHoldings(req as AuthedRequest, res))
+  );
+  pr.post(
+    "/:projectId/investment-plans/:planId/holdings",
+    asyncHandler((req, res) => inv.createHolding(req as AuthedRequest, res))
+  );
+  pr.get(
+    "/:projectId/investment-plans/:planId/holdings/:holdingId",
+    asyncHandler((req, res) => inv.getHolding(req as AuthedRequest, res))
+  );
+  pr.patch(
+    "/:projectId/investment-plans/:planId/holdings/:holdingId",
+    asyncHandler((req, res) => inv.updateHolding(req as AuthedRequest, res))
+  );
+  pr.patch(
+    "/:projectId/investment-plans/:planId/holdings/:holdingId/current-nav",
+    asyncHandler((req, res) => inv.patchHoldingCurrentNav(req as AuthedRequest, res))
+  );
+  pr.delete(
+    "/:projectId/investment-plans/:planId/holdings/:holdingId",
+    asyncHandler((req, res) => inv.deleteHolding(req as AuthedRequest, res))
+  );
+  pr.get(
+    "/:projectId/investment-plans/:planId/holdings/:holdingId/transactions",
+    asyncHandler((req, res) => inv.listHoldingTransactions(req as AuthedRequest, res))
+  );
+  pr.post(
+    "/:projectId/investment-plans/:planId/holdings/:holdingId/transactions",
+    asyncHandler((req, res) => inv.createHoldingTransaction(req as AuthedRequest, res))
   );
 
   r.get("/banks", (_req, res) => {

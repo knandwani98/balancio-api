@@ -13,12 +13,6 @@ export function categoriesForNestedProjectCreate(
   }));
 }
 
-export function goalsForNestedProjectCreate(
-  _createdByUserId: string
-): Prisma.GoalCreateManyProjectInput[] {
-  return [];
-}
-
 export async function seedDefaultCategories(
   tx: Prisma.TransactionClient,
   projectId: string,
@@ -34,12 +28,4 @@ export async function seedDefaultCategories(
     })),
     skipDuplicates: true,
   });
-}
-
-export async function seedDefaultGoals(
-  _tx: Prisma.TransactionClient,
-  _projectId: string,
-  _creatorUserId: string
-): Promise<void> {
-  /* no default goals */
 }

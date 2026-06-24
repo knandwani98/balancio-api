@@ -4,14 +4,22 @@ import type { AuthedRequest } from "../middleware/clerkAuth.js";
 import type { InvestmentPlanRepository } from "../repositories/investmentPlanRepository.js";
 import {
   createInvestmentPlanSchema,
+  createPlanHoldingSchema,
+  createPlanHoldingTransactionSchema,
   createPlanPointSchema,
+  patchPlanHoldingCurrentNavSchema,
   updateInvestmentPlanSchema,
+  updatePlanHoldingSchema,
   updatePlanPointSchema,
 } from "../models/schemas.js";
 import { assertProjectMember } from "../lib/projectAuthz.js";
 import { parseISODateOnly } from "../lib/prismaMappers.js";
 import { toPrismaDecimal } from "../lib/money.js";
 import { toPlanDetailRow, toPlanListSummaryRow } from "../lib/investmentPlanMappers.js";
+import { normalizePlanHoldingAsset } from "../lib/planHoldingAsset.js";
+import { normalizePlanHoldingBroker } from "../lib/planHoldingBroker.js";
+import { toPlanHoldingRow } from "../lib/planHoldingMappers.js";
+import { toPlanHoldingTransactionRow } from "../lib/planHoldingTransactionMappers.js";
 import {
   normalizeAndValidateFunds,
   type PlanFundInput,
@@ -24,6 +32,10 @@ import {
   initialPointEffectiveFrom,
   parseEffectiveFrom,
 } from "../services/planTimelineService.js";
+import {
+  fundNameToInitials,
+  randomBadgeColor,
+} from "../services/fundBadgeUtils.js";
 
 function mapFundInputs(
   funds: {
@@ -31,6 +43,7 @@ function mapFundInputs(
     input_mode: "percentage" | "amount";
     value: number;
     frequency?: BudgetRecurrence;
+    schedule_day?: number | null;
   }[]
 ): PlanFundInput[] {
   return funds.map((f) => ({
@@ -38,6 +51,7 @@ function mapFundInputs(
     input_mode: f.input_mode,
     value: f.value,
     frequency: f.frequency ?? "monthly",
+    schedule_day: f.schedule_day ?? null,
   }));
 }
 
@@ -52,7 +66,7 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
           toPlanListSummaryRow({
             ...p,
             point_count: p._count.points,
-          } as Parameters<typeof toPlanListSummaryRow>[0])
+          })
         )
       );
     },
@@ -323,6 +337,198 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
       } catch (e) {
         res.status(400).json({ error: e instanceof Error ? e.message : "Delete failed" });
       }
+    },
+
+    listHoldings: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      await assertProjectMember(req.userId, projectId);
+
+      const rows = await plans.listHoldings(projectId, planId);
+      if (!rows) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
+      res.json(rows.map(toPlanHoldingRow));
+    },
+
+    getHolding: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      const holdingId = String(req.params.holdingId);
+      await assertProjectMember(req.userId, projectId);
+
+      const row = await plans.getHolding(projectId, planId, holdingId);
+      if (!row) {
+        res.status(404).json({ error: "Holding not found" });
+        return;
+      }
+      res.json(toPlanHoldingRow(row));
+    },
+
+    createHolding: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      await assertProjectMember(req.userId, projectId);
+
+      const parsed = createPlanHoldingSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      const trimmedName = parsed.data.name.trim();
+      const badge = fundNameToInitials(trimmedName);
+      if (!badge) {
+        res.status(400).json({ error: "Enter a valid fund name to generate an icon" });
+        return;
+      }
+
+      const brokerFields = normalizePlanHoldingBroker(parsed.data);
+      const assetFields = normalizePlanHoldingAsset({
+        asset_type: parsed.data.asset_type,
+        asset_metal: parsed.data.asset_metal,
+        asset_other_name: parsed.data.asset_other_name,
+      });
+
+      const row = await plans.createHolding(projectId, planId, {
+        name: trimmedName,
+        badge,
+        badge_class_name: parsed.data.badge_class_name ?? randomBadgeColor(),
+        fund_type: parsed.data.fund_type ?? "index",
+        asset_type: parsed.data.asset_type ?? "equity",
+        asset_metal: assetFields.asset_metal,
+        asset_other_name: assetFields.asset_other_name,
+        broker: brokerFields.broker,
+        broker_name: brokerFields.broker_name,
+      });
+      if (!row) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
+      res.status(201).json(toPlanHoldingRow(row));
+    },
+
+    updateHolding: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      const holdingId = String(req.params.holdingId);
+      await assertProjectMember(req.userId, projectId);
+
+      const parsed = updatePlanHoldingSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      const trimmedName = parsed.data.name.trim();
+      const badge = fundNameToInitials(trimmedName);
+      if (!badge) {
+        res.status(400).json({ error: "Enter a valid fund name to generate an icon" });
+        return;
+      }
+
+      const brokerFields = normalizePlanHoldingBroker(parsed.data);
+      const assetFields = normalizePlanHoldingAsset({
+        asset_type: parsed.data.asset_type,
+        asset_metal: parsed.data.asset_metal,
+        asset_other_name: parsed.data.asset_other_name,
+      });
+
+      const row = await plans.updateHolding(projectId, planId, holdingId, {
+        name: trimmedName,
+        badge,
+        fund_type: parsed.data.fund_type,
+        asset_type: parsed.data.asset_type,
+        asset_metal: assetFields.asset_metal,
+        asset_other_name: assetFields.asset_other_name,
+        broker: brokerFields.broker,
+        broker_name: brokerFields.broker_name,
+      });
+      if (!row) {
+        res.status(404).json({ error: "Holding not found" });
+        return;
+      }
+      res.json(toPlanHoldingRow(row));
+    },
+
+    patchHoldingCurrentNav: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      const holdingId = String(req.params.holdingId);
+      await assertProjectMember(req.userId, projectId);
+
+      const parsed = patchPlanHoldingCurrentNavSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      const row = await plans.patchHoldingCurrentNav(
+        projectId,
+        planId,
+        holdingId,
+        parsed.data.nav
+      );
+      if (!row) {
+        res.status(404).json({ error: "Holding not found" });
+        return;
+      }
+      res.json(toPlanHoldingRow(row));
+    },
+
+    deleteHolding: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      const holdingId = String(req.params.holdingId);
+      await assertProjectMember(req.userId, projectId);
+
+      const deleted = await plans.deleteHolding(projectId, planId, holdingId);
+      if (!deleted) {
+        res.status(404).json({ error: "Holding not found" });
+        return;
+      }
+      res.status(204).send();
+    },
+
+    listHoldingTransactions: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      const holdingId = String(req.params.holdingId);
+      await assertProjectMember(req.userId, projectId);
+
+      const rows = await plans.listHoldingTransactions(projectId, planId, holdingId);
+      if (!rows) {
+        res.status(404).json({ error: "Holding not found" });
+        return;
+      }
+      res.json(rows.map(toPlanHoldingTransactionRow));
+    },
+
+    createHoldingTransaction: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      const holdingId = String(req.params.holdingId);
+      await assertProjectMember(req.userId, projectId);
+
+      const parsed = createPlanHoldingTransactionSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      const row = await plans.createHoldingTransaction(projectId, planId, holdingId, {
+        txn_date: parseISODateOnly(parsed.data.txn_date),
+        nav: parsed.data.nav,
+        units: parsed.data.units,
+        amount: parsed.data.amount,
+        invested: parsed.data.invested,
+      });
+      if (!row) {
+        res.status(404).json({ error: "Holding not found" });
+        return;
+      }
+      res.status(201).json(toPlanHoldingTransactionRow(row));
     },
   };
 }

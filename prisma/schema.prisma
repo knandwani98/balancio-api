@@ -74,12 +74,6 @@ enum BankAccountType {
   current
 }
 
-enum GoalTenureMode {
-  infinite
-  fixed_days
-  aim
-}
-
 enum PlanFundInputMode {
   percentage
   amount
@@ -104,7 +98,6 @@ model User {
   categories_created      Category[]          @relation("CategoryCreator")
   budgets_created         Budget[]            @relation("BudgetCreator")
   transactions_created    Transaction[]       @relation("TransactionCreator")
-  goals_created           Goal[]              @relation("GoalCreator")
   investment_plans_created InvestmentPlan[]   @relation("InvestmentPlanCreator")
   bank_accounts_created   BankAccount[]       @relation("BankAccountCreator")
   cards                   Card[]
@@ -130,7 +123,6 @@ model Project {
   categories   Category[]
   budgets              Budget[]
   transactions         Transaction[]
-  goals                Goal[]
   investment_plans     InvestmentPlan[]
 
   @@index([created_by_user_id])
@@ -266,33 +258,6 @@ model Transaction {
   @@map("transaction")
 }
 
-model Goal {
-  id                     String          @id @default(uuid()) @db.Uuid
-  project_id             String          @db.Uuid
-  created_by_user_id     String
-  name                   String
-  amount           Decimal @db.Decimal(19, 4)
-  frequency              BudgetRecurrence
-  tenure_mode            GoalTenureMode
-  fixed_days             Int?
-  aim_amount       Decimal? @db.Decimal(19, 4)
-  source                 PaymentMethod
-  interest_rate_pa       Decimal?        @db.Decimal(5, 2)
-  start_date             DateTime?       @db.Date
-  maturity_date          DateTime?       @db.Date
-  linked_bank_account_id String?         @db.Uuid
-  is_archived            Boolean         @default(false)
-  created_at             DateTime        @default(now()) @db.Timestamptz(6)
-  updated_at             DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
-
-  project             Project      @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  created_by          User         @relation("GoalCreator", fields: [created_by_user_id], references: [id], onDelete: Restrict)
-  linked_bank_account BankAccount? @relation(fields: [linked_bank_account_id], references: [id], onDelete: SetNull)
-
-  @@index([project_id])
-  @@map("goal")
-}
-
 model BankAccount {
   id              String          @id @default(uuid()) @db.Uuid
   createdBy       String          @map("created_by")
@@ -308,7 +273,6 @@ model BankAccount {
 
   creator      User          @relation("BankAccountCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   transactions Transaction[]
-  goals        Goal[]
   budgets      Budget[]
 
   @@index([createdBy])
@@ -367,6 +331,7 @@ model InvestmentPlan {
   project    Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
   created_by User                @relation("InvestmentPlanCreator", fields: [created_by_user_id], references: [id], onDelete: Restrict)
   points     PlanTimelinePoint[]
+  holdings   PlanHolding[]
 
   @@index([project_id])
   @@map("investment_plan")
@@ -394,11 +359,57 @@ model PlanFund {
   name        String
   percentage  Decimal           @db.Decimal(7, 4)
   input_mode  PlanFundInputMode @default(percentage)
-  frequency   BudgetRecurrence  @default(monthly)
-  sort_order  Int               @default(0)
+  frequency    BudgetRecurrence  @default(monthly)
+  schedule_day Int?
+  sort_order   Int               @default(0)
 
   point PlanTimelinePoint @relation(fields: [point_id], references: [id], onDelete: Cascade)
 
   @@index([point_id])
   @@map("plan_fund")
+}
+
+model PlanHolding {
+  id                 String   @id @default(uuid()) @db.Uuid
+  plan_id            String   @db.Uuid
+  name               String
+  badge              String
+  badge_class_name   String
+  fund_type          String   @default("index")
+  asset_type         String   @default("equity")
+  asset_metal        String?
+  asset_other_name   String?
+  broker             String   @default("zerodha")
+  broker_name        String?
+  invested           Decimal  @default(0) @db.Decimal(19, 4)
+  current_nav        Decimal? @db.Decimal(19, 6)
+  current_value      Decimal  @default(0) @db.Decimal(19, 4)
+  one_day_change     Decimal  @default(0) @db.Decimal(19, 4)
+  one_day_change_pct Decimal  @default(0) @db.Decimal(7, 4)
+  sort_order         Int      @default(0)
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime @updatedAt @db.Timestamptz(6)
+
+  plan InvestmentPlan @relation(fields: [plan_id], references: [id], onDelete: Cascade)
+  transactions PlanHoldingTransaction[]
+
+  @@index([plan_id])
+  @@map("plan_holding")
+}
+
+model PlanHoldingTransaction {
+  id         String   @id @default(uuid()) @db.Uuid
+  holding_id String   @db.Uuid
+  txn_date   DateTime @db.Date
+  nav        Decimal  @db.Decimal(19, 6)
+  units      Decimal  @db.Decimal(19, 6)
+  amount     Decimal  @db.Decimal(19, 4)
+  invested   Decimal  @db.Decimal(19, 4)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @updatedAt @db.Timestamptz(6)
+
+  holding PlanHolding @relation(fields: [holding_id], references: [id], onDelete: Cascade)
+
+  @@index([holding_id, txn_date])
+  @@map("plan_holding_transaction")
 }

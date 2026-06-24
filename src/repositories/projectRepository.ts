@@ -1,7 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import {
   categoriesForNestedProjectCreate,
-  goalsForNestedProjectCreate,
 } from "../services/projectBootstrapService.js";
 
 function normalizeEmail(email: string): string {
@@ -32,7 +31,6 @@ export class ProjectRepository {
     userId: string,
     input: { name: string; description?: string | null; icon_url?: string | null }
   ) {
-    const goalRows = goalsForNestedProjectCreate(userId);
     return prisma.project.create({
       data: {
         name: input.name,
@@ -45,9 +43,6 @@ export class ProjectRepository {
         categories: {
           createMany: { data: categoriesForNestedProjectCreate(userId) },
         },
-        ...(goalRows.length > 0
-          ? { goals: { createMany: { data: goalRows } } }
-          : {}),
       },
     });
   }

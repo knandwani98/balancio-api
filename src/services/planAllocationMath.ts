@@ -6,6 +6,7 @@ export type PlanFundInput = {
   input_mode: PlanFundInputMode;
   value: number;
   frequency: BudgetRecurrence;
+  schedule_day?: number | null;
 };
 
 export type NormalizedPlanFund = {
@@ -14,6 +15,7 @@ export type NormalizedPlanFund = {
   percentage: number;
   computed_amount: number;
   frequency: BudgetRecurrence;
+  schedule_day: number | null;
 };
 
 const PERCENT_SUM_TOLERANCE = 0.02;
@@ -49,6 +51,7 @@ export function normalizePlanFund(
     percentage,
     computed_amount,
     frequency: item.frequency,
+    schedule_day: item.schedule_day ?? null,
   };
 }
 

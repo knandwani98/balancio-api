@@ -2,14 +2,13 @@ import { prisma } from "../lib/prisma.js";
 import { toCategoryRow } from "../lib/prismaMappers.js";
 import type { Database } from "../types/database.js";
 import type { CategoryKind } from "@prisma/client";
-import { seedDefaultCategories, seedDefaultGoals } from "../services/projectBootstrapService.js";
+import { seedDefaultCategories } from "../services/projectBootstrapService.js";
 
 export class CategoryRepository {
-  /** Idempotent: canonical category list + default goals for migrated/legacy projects. */
+  /** Idempotent: canonical category list for migrated/legacy projects. */
   async ensureCanonicalSeed(projectId: string, creatorUserId: string): Promise<void> {
     await prisma.$transaction(async (tx) => {
       await seedDefaultCategories(tx, projectId, creatorUserId);
-      await seedDefaultGoals(tx, projectId, creatorUserId);
     });
   }
 

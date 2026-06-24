@@ -155,6 +155,7 @@ export const planFundInputSchema = z.object({
   input_mode: z.enum(["percentage", "amount"]),
   value: amountNonNegative.refine((n) => n > 0, "value must be greater than zero"),
   frequency: budgetRecurrenceEnum.default("monthly"),
+  schedule_day: z.number().int().min(1).max(28).optional().nullable(),
 });
 
 export const createPlanPointBodySchema = z.object({
@@ -195,18 +196,101 @@ export const updatePlanPointSchema = z.object({
   funds: z.array(planFundInputSchema).min(1).optional(),
 });
 
-export const createGoalSchema = z.object({
-  name: z.string().min(1),
-  amount: amountNonNegative,
-  frequency: z.enum(["monthly", "yearly", "quarterly", "weekly", "daily", "one_time"]),
-  tenure_mode: z.enum(["infinite", "fixed_days", "aim"]),
-  fixed_days: z.number().int().positive().optional().nullable(),
-  aim_amount: amountNonNegative.optional().nullable(),
-  source: z.enum(["cash", "bank", "cards", "stocks", "wallet"]),
-  interest_rate_pa: z.number().optional().nullable(),
-  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  maturity_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
-  linked_bank_account_id: z.string().uuid().optional().nullable(),
+export const planFundTypeValues = [
+  "large_cap",
+  "mid_cap",
+  "small_cap",
+  "flexi_cap",
+  "multi_cap",
+  "fof",
+  "elss",
+  "index",
+  "sectoral",
+  "international",
+  "liquid",
+  "ultra_short",
+  "short_duration",
+  "other",
+] as const;
+
+export const planAssetTypeValues = [
+  "equity",
+  "debt",
+  "hybrid",
+  "solution_oriented",
+  "other",
+] as const;
+
+export const planAssetMetalValues = [
+  "gold",
+  "silver",
+  "platinum",
+  "palladium",
+  "copper",
+] as const;
+
+const planHoldingAssetFields = {
+  asset_metal: z.enum(planAssetMetalValues).optional().nullable(),
+  asset_other_name: z.string().trim().min(1).max(80).optional().nullable(),
+};
+
+export const planBrokerValues = [
+  "zerodha",
+  "grow",
+  "indmoney",
+  "angel_one",
+  "other",
+] as const;
+
+const planHoldingBrokerFields = {
+  broker: z.enum(planBrokerValues).optional(),
+  broker_name: z.string().trim().min(1).max(80).optional().nullable(),
+};
+
+function withBrokerRefine<T extends z.ZodObject<z.ZodRawShape>>(schema: T) {
+  return schema.superRefine((data, ctx) => {
+    const broker = data.broker ?? "zerodha";
+    if (broker === "other" && !data.broker_name?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Broker name is required when broker is Other",
+        path: ["broker_name"],
+      });
+    }
+  });
+}
+
+export const createPlanHoldingSchema = withBrokerRefine(
+  z.object({
+    name: z.string().trim().min(1).max(120),
+    badge_class_name: z.string().trim().min(1).max(80).optional(),
+    fund_type: z.enum(planFundTypeValues).optional(),
+    asset_type: z.enum(planAssetTypeValues).optional(),
+    ...planHoldingAssetFields,
+    ...planHoldingBrokerFields,
+  })
+);
+
+export const updatePlanHoldingSchema = withBrokerRefine(
+  z.object({
+    name: z.string().trim().min(1).max(120),
+    fund_type: z.enum(planFundTypeValues).optional(),
+    asset_type: z.enum(planAssetTypeValues).optional(),
+    ...planHoldingAssetFields,
+    ...planHoldingBrokerFields,
+  })
+);
+
+export const patchPlanHoldingCurrentNavSchema = z.object({
+  nav: amountNonNegative.refine((n) => n > 0, "nav must be greater than zero"),
+});
+
+export const createPlanHoldingTransactionSchema = z.object({
+  txn_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  nav: amountNonNegative.refine((n) => n > 0, "nav must be greater than zero"),
+  units: amountNonNegative.refine((n) => n > 0, "units must be greater than zero"),
+  amount: amountNonNegative.refine((n) => n > 0, "amount must be greater than zero"),
+  invested: amountNonNegative.refine((n) => n > 0, "invested must be greater than zero"),
 });
 
 const accountNumberDigits = z
