@@ -1,0 +1,2 @@
+-- Baseline for databases that were provisioned with `prisma db push` before Prisma Migrate.
+-- No SQL changes: marks the existing schema as the migration starting point.
