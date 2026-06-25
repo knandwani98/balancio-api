@@ -526,7 +526,7 @@ export class InvestmentPlanRepository {
   async listPlanTransactions(
     projectId: string,
     planId: string,
-    options: { sort?: "newest" | "oldest" } = {}
+    options: { sort?: "newest" | "oldest"; from?: Date; to?: Date } = {}
   ) {
     const plan = await prisma.investmentPlan.findFirst({
       where: { id: planId, project_id: projectId },
@@ -540,8 +540,18 @@ export class InvestmentPlanRepository {
         ? [{ txn_date: "asc" as const }, { created_at: "asc" as const }]
         : [{ txn_date: "desc" as const }, { created_at: "desc" as const }];
 
+    const txnDateFilter =
+      options.from || options.to
+        ? {
+            txn_date: {
+              ...(options.from ? { gte: options.from } : {}),
+              ...(options.to ? { lte: options.to } : {}),
+            },
+          }
+        : {};
+
     return prisma.planHoldingTransaction.findMany({
-      where: { holding: { plan_id: planId } },
+      where: { holding: { plan_id: planId }, ...txnDateFilter },
       include: {
         holding: {
           select: { id: true, name: true },

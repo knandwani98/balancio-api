@@ -231,8 +231,12 @@ export const listPlanHoldingsQuerySchema = z.object({
 
 export const planOrderSortValues = ["newest", "oldest"] as const;
 
+const isoDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
 export const listPlanOrdersQuerySchema = z.object({
   sort: z.enum(planOrderSortValues).optional(),
+  from: isoDateString.optional(),
+  to: isoDateString.optional(),
 });
 
 export const planAssetTypeValues = [

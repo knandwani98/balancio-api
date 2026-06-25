@@ -541,8 +541,17 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
         return;
       }
 
+      const from = parsed.data.from
+        ? new Date(`${parsed.data.from}T00:00:00.000`)
+        : undefined;
+      const to = parsed.data.to
+        ? new Date(`${parsed.data.to}T23:59:59.999`)
+        : undefined;
+
       const rows = await plans.listPlanTransactions(projectId, planId, {
         sort: parsed.data.sort,
+        from,
+        to,
       });
       if (!rows) {
         res.status(404).json({ error: "Plan not found" });
