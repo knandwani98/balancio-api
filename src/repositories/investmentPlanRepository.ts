@@ -1,5 +1,6 @@
 import type { PlanFundInputMode, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { planNamesMatchSlug } from "../lib/investmentPlanSlug.js";
 import type { NormalizedPlanFund } from "../services/planAllocationMath.js";
 import { toPrismaPercentage } from "../services/planAllocationMath.js";
 import { computeTimelineEffectiveToChain } from "../services/planTimelineService.js";
@@ -714,5 +715,53 @@ export class InvestmentPlanRepository {
         current_value: currentValue,
       },
     });
+  }
+
+  async networthStats(projectId: string) {
+    const holdingSum = await prisma.planHolding.aggregate({
+      where: { plan: { project_id: projectId, is_tracked: true } },
+      _sum: { current_value: true },
+    });
+
+    return {
+      total_value: holdingSum._sum.current_value?.toNumber() ?? 0,
+    };
+  }
+
+  async resolveBySlug(projectId: string, slug: string) {
+    const plans = await prisma.investmentPlan.findMany({
+      where: { project_id: projectId, is_tracked: true },
+      select: { id: true, name: true },
+    });
+    return plans.find((plan) => planNamesMatchSlug(plan.name, slug)) ?? null;
+  }
+
+  async portfolioSummary(projectId: string, planId: string) {
+    const plan = await prisma.investmentPlan.findFirst({
+      where: { id: planId, project_id: projectId, is_tracked: true },
+      select: { id: true, name: true },
+    });
+    if (!plan) return null;
+
+    const holdingAgg = await prisma.planHolding.aggregate({
+      where: { plan_id: planId },
+      _sum: { current_value: true, invested: true },
+    });
+
+    const totalValue = holdingAgg._sum.current_value?.toNumber() ?? 0;
+    const invested = holdingAgg._sum.invested?.toNumber() ?? 0;
+    const currentReturns = totalValue - invested;
+    const returnsPct = invested > 0 ? (currentReturns / invested) * 100 : 0;
+
+    return {
+      plan_id: plan.id,
+      plan_name: plan.name,
+      label: "Portfolio",
+      total_value: totalValue,
+      invested,
+      current_returns: currentReturns,
+      returns_pct: returnsPct,
+      xirr: 0,
+    };
   }
 }

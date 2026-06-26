@@ -6,6 +6,7 @@ import {
   createBankAccountSchema,
   createCardSchema,
   createWalletSchema,
+  adjustBankBalanceSchema,
   updateBankAccountSchema,
   updateCardSchema,
   updateWalletSchema,
@@ -71,6 +72,24 @@ export function paymentInstrumentController(
         return;
       }
       res.json({ ok: true });
+    },
+    adjustBankBalance: async (req: AuthedRequest, res: Response) => {
+      const parsed = adjustBankBalanceSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+      const bankAccountId = String(req.params.id);
+      const account = await repo.getBankAccountForUser(req.userId, bankAccountId);
+      if (!account) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      const txnNet = await transactions.computeClearedTransactionNetForBankAccount(bankAccountId);
+      const ledgerBaseline = parsed.data.balance - txnNet;
+      await repo.setBankAccountLedgerBaseline(req.userId, bankAccountId, ledgerBaseline);
+      const current_balance = await transactions.computeNetBalanceForBankAccount(bankAccountId);
+      res.json({ ok: true, current_balance });
     },
     deleteBank: async (req: AuthedRequest, res: Response) => {
       const n = await repo.deleteBankAccount(req.userId, String(req.params.id));

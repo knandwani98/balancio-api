@@ -76,6 +76,47 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
       );
     },
 
+    resolveBySlug: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const slug = String(req.params.slug);
+      await assertProjectMember(req.userId, projectId);
+      const plan = await plans.resolveBySlug(projectId, slug);
+      if (!plan) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
+      res.json(plan);
+    },
+
+    portfolioSummaryBySlug: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const slug = String(req.params.slug);
+      await assertProjectMember(req.userId, projectId);
+      const plan = await plans.resolveBySlug(projectId, slug);
+      if (!plan) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
+      const summary = await plans.portfolioSummary(projectId, plan.id);
+      if (!summary) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
+      res.json(summary);
+    },
+
+    portfolioSummary: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      await assertProjectMember(req.userId, projectId);
+      const summary = await plans.portfolioSummary(projectId, planId);
+      if (!summary) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
+      res.json(summary);
+    },
+
     get: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
       const planId = String(req.params.planId);
