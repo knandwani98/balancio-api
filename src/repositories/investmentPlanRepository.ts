@@ -352,7 +352,7 @@ export class InvestmentPlanRepository {
 
     const sort = options?.sort ?? "default";
 
-    if (sort === "name") {
+    if (sort === "name" || sort === "default") {
       return prisma.planHolding.findMany({
         where,
         orderBy: { name: "asc" },
@@ -389,7 +389,7 @@ export class InvestmentPlanRepository {
 
     return prisma.planHolding.findMany({
       where,
-      orderBy: [{ sort_order: "asc" }, { created_at: "asc" }],
+      orderBy: { name: "asc" },
     });
   }
 
