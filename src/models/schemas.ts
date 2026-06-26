@@ -123,6 +123,21 @@ export const summaryQuerySchema = z.object({
   month: z.coerce.number().int().min(1).max(12),
 });
 
+export const networthQuerySchema = z.object({
+  sections: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (!value?.trim()) return ["investments"] as const;
+      const parts = value
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      return parts.length > 0 ? parts : (["investments"] as const);
+    })
+    .pipe(z.array(z.enum(["investments", "banks", "insurance"]))),
+});
+
 export const createProjectSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional().nullable(),
@@ -231,8 +246,12 @@ export const listPlanHoldingsQuerySchema = z.object({
 
 export const planOrderSortValues = ["newest", "oldest"] as const;
 
+const isoDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
 export const listPlanOrdersQuerySchema = z.object({
   sort: z.enum(planOrderSortValues).optional(),
+  from: isoDateString.optional(),
+  to: isoDateString.optional(),
 });
 
 export const planAssetTypeValues = [
@@ -337,6 +356,10 @@ export const createBankAccountSchema = z.object({
 });
 
 export const updateBankAccountSchema = createBankAccountSchema.partial();
+
+export const adjustBankBalanceSchema = z.object({
+  balance: amountNonNegative,
+});
 
 /**
  * PCI: never persist full card numbers. Optional `number_for_brand_detection` is used in-memory only

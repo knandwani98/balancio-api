@@ -7,6 +7,7 @@ import { budgetController } from "../controllers/budgetController.js";
 import { summaryController } from "../controllers/summaryController.js";
 import { projectController } from "../controllers/projectController.js";
 import { investmentPlanController } from "../controllers/investmentPlanController.js";
+import { networthController } from "../controllers/networthController.js";
 import { userProfileController } from "../controllers/userProfileController.js";
 import { paymentInstrumentController } from "../controllers/paymentInstrumentController.js";
 import type { CategoryRepository } from "../repositories/categoryRepository.js";
@@ -38,6 +39,11 @@ export function apiV1Router(deps: {
   const bud = budgetController(deps.budgets, deps.transactions, deps.categories, deps.projects);
   const sum = summaryController(deps.analytics, deps.projects);
   const inv = investmentPlanController(deps.investmentPlans);
+  const networth = networthController(
+    deps.investmentPlans,
+    deps.paymentInstruments,
+    deps.transactions
+  );
   const pay = paymentInstrumentController(deps.paymentInstruments, deps.transactions);
 
   const pr = Router();
@@ -101,6 +107,20 @@ export function apiV1Router(deps: {
 
   pr.get("/:projectId/summary", asyncHandler((req, res) => sum.get(req as AuthedRequest, res)));
 
+  pr.get("/:projectId/networth", asyncHandler((req, res) => networth.get(req as AuthedRequest, res)));
+
+  pr.get(
+    "/:projectId/investment-plans/by-slug/:slug",
+    asyncHandler((req, res) => inv.resolveBySlug(req as AuthedRequest, res))
+  );
+  pr.get(
+    "/:projectId/investment-plans/by-slug/:slug/summary",
+    asyncHandler((req, res) => inv.portfolioSummaryBySlug(req as AuthedRequest, res))
+  );
+  pr.get(
+    "/:projectId/investment-plans/:planId/summary",
+    asyncHandler((req, res) => inv.portfolioSummary(req as AuthedRequest, res))
+  );
   pr.get(
     "/:projectId/investment-plans",
     asyncHandler((req, res) => inv.list(req as AuthedRequest, res))
@@ -185,6 +205,10 @@ export function apiV1Router(deps: {
   r.get("/bank-accounts", asyncHandler((req, res) => pay.listBanks(req as AuthedRequest, res)));
   r.post("/bank-accounts", asyncHandler((req, res) => pay.createBank(req as AuthedRequest, res)));
   r.patch("/bank-accounts/:id", asyncHandler((req, res) => pay.updateBank(req as AuthedRequest, res)));
+  r.patch(
+    "/bank-accounts/:id/adjust-balance",
+    asyncHandler((req, res) => pay.adjustBankBalance(req as AuthedRequest, res))
+  );
   r.delete("/bank-accounts/:id", asyncHandler((req, res) => pay.deleteBank(req as AuthedRequest, res)));
 
   r.get("/cards", asyncHandler((req, res) => pay.listCards(req as AuthedRequest, res)));
