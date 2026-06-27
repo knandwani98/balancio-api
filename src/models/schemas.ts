@@ -329,8 +329,8 @@ export const patchPlanHoldingCurrentNavSchema = z.object({
 export const createPlanHoldingTransactionSchema = z.object({
   txn_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   nav: amountNonNegative.refine((n) => n > 0, "nav must be greater than zero"),
-  units: amountNonNegative.refine((n) => n > 0, "units must be greater than zero"),
-  amount: amountNonNegative.refine((n) => n > 0, "amount must be greater than zero"),
+  units: z.number().refine((n) => n !== 0, "units must not be zero"),
+  amount: z.number().refine((n) => n !== 0, "amount must not be zero"),
   invested: amountNonNegative.refine((n) => n > 0, "invested must be greater than zero"),
 });
 
