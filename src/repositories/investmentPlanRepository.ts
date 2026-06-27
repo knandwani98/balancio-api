@@ -555,7 +555,16 @@ export class InvestmentPlanRepository {
       where: { holding: { plan_id: planId }, ...txnDateFilter },
       include: {
         holding: {
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+            broker: true,
+            broker_name: true,
+            fund_type: true,
+            asset_type: true,
+            asset_metal: true,
+            asset_other_name: true,
+          },
         },
       },
       orderBy,
