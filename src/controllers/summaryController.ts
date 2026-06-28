@@ -15,13 +15,13 @@ export function summaryController(analytics: AnalyticsService, projects: Project
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      const { year, month } = parsed.data;
+      const { from, to } = parsed.data;
       const p = await projects.getById(projectId);
       if (!p) {
         res.status(404).json({ error: "Not found" });
         return;
       }
-      const dash = await analytics.monthlyDashboard(projectId, year, month - 1);
+      const dash = await analytics.rangeDashboard(projectId, from, to);
       res.json(dash);
     },
   };

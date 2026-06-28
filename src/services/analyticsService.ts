@@ -11,14 +11,9 @@ export class AnalyticsService {
     private categories: CategoryRepository
   ) {}
 
-  async monthlyDashboard(projectId: string, year: number, monthIndex0: number) {
-    const monthStart = startOfMonthUTC(year, monthIndex0);
-    const monthEnd = new Date(Date.UTC(year, monthIndex0 + 1, 0));
-    const from = toISODate(monthStart);
-    const to = toISODate(monthEnd);
-
-    const sums = await this.transactions.sumByTypeInMonth(projectId, year, monthIndex0);
-    const byCat = await this.transactions.sumExpenseByCategoryInMonth(projectId, year, monthIndex0);
+  async rangeDashboard(projectId: string, from: string, to: string) {
+    const sums = await this.transactions.sumByTypeInRange(projectId, from, to);
+    const byCat = await this.transactions.sumExpenseByCategoryInRange(projectId, from, to);
     const cats = await this.categories.list(projectId);
     const catNames = new Map(cats.map((c) => [c.id, c.name]));
 
@@ -40,13 +35,25 @@ export class AnalyticsService {
     }
 
     return {
-      month: { year, month: monthIndex0 + 1 },
+      period: { from, to },
       income: sums.income,
       expense: sums.expense,
       net: sums.income - sums.expense,
       planned_expense,
       planned_vs_actual_variance: planned_expense - sums.expense,
       category_breakdown,
+    };
+  }
+
+  async monthlyDashboard(projectId: string, year: number, monthIndex0: number) {
+    const monthStart = startOfMonthUTC(year, monthIndex0);
+    const monthEnd = new Date(Date.UTC(year, monthIndex0 + 1, 0));
+    const from = toISODate(monthStart);
+    const to = toISODate(monthEnd);
+    const dash = await this.rangeDashboard(projectId, from, to);
+    return {
+      ...dash,
+      month: { year, month: monthIndex0 + 1 },
     };
   }
 }

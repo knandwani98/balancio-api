@@ -118,10 +118,17 @@ export const patchOccurrenceSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
-export const summaryQuerySchema = z.object({
-  year: z.coerce.number().int().min(2000).max(2100),
-  month: z.coerce.number().int().min(1).max(12),
-});
+const isoDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const summaryQuerySchema = z
+  .object({
+    from: isoDateString,
+    to: isoDateString,
+  })
+  .refine((data) => data.from <= data.to, {
+    message: "from must be on or before to",
+    path: ["from"],
+  });
 
 export const networthQuerySchema = z.object({
   sections: z
@@ -245,8 +252,6 @@ export const listPlanHoldingsQuerySchema = z.object({
 });
 
 export const planOrderSortValues = ["newest", "oldest"] as const;
-
-const isoDateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const listPlanOrdersQuerySchema = z.object({
   sort: z.enum(planOrderSortValues).optional(),
