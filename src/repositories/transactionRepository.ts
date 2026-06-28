@@ -451,7 +451,10 @@ export class TransactionRepository {
     const end = new Date(Date.UTC(year, monthIndex0 + 1, 0));
     const from = start.toISOString().slice(0, 10);
     const to = end.toISOString().slice(0, 10);
+    return this.sumByTypeInRange(projectId, from, to);
+  }
 
+  async sumByTypeInRange(projectId: string, from: string, to: string) {
     const rows = await prisma.transaction.findMany({
       where: {
         project_id: projectId,
@@ -479,7 +482,10 @@ export class TransactionRepository {
     const end = new Date(Date.UTC(year, monthIndex0 + 1, 0));
     const from = start.toISOString().slice(0, 10);
     const to = end.toISOString().slice(0, 10);
+    return this.sumExpenseByCategoryInRange(projectId, from, to);
+  }
 
+  async sumExpenseByCategoryInRange(projectId: string, from: string, to: string) {
     const rows = await prisma.transaction.findMany({
       where: {
         project_id: projectId,

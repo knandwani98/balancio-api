@@ -4,16 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "prisma generate && tsx watch src/index.ts",
-    "build": "prisma generate && tsc",
+    "dev": "bunx prisma generate && tsx watch src/index.ts",
+    "build": "bun install && bunx prisma generate && tsc",
     "start": "node dist/index.js",
-    "postinstall": "prisma generate",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy",
-    "db:dev": "prisma migrate dev",
-    "db:push": "prisma db push",
+    "postinstall": "bunx prisma generate",
+    "db:generate": "bunx prisma generate",
+    "db:migrate": "bunx prisma migrate deploy",
+    "db:dev": "bunx prisma migrate dev",
+    "db:push": "bunx prisma db push",
     "db:deploy": "sh scripts/db-deploy.sh",
-    "db:studio": "prisma studio"
+    "db:studio": "bunx prisma studio"
   },
   "dependencies": {
     "@clerk/backend": "^1.21.0",

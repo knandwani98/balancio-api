@@ -6,7 +6,7 @@ MAX_RECOVERY_ATTEMPTS=10
 attempt=0
 
 run_deploy() {
-  prisma migrate deploy 2>&1
+  bunx prisma migrate deploy 2>&1
 }
 
 extract_failed_migration() {
@@ -25,7 +25,7 @@ resolve_failed_migration() {
   FAILED_MIGRATION=$(extract_failed_migration "$1")
   if [ -n "$FAILED_MIGRATION" ]; then
     echo "Recovering failed migration: marking $FAILED_MIGRATION as applied"
-    prisma migrate resolve --applied "$FAILED_MIGRATION"
+    bunx prisma migrate resolve --applied "$FAILED_MIGRATION"
     return 0
   fi
   return 1
@@ -43,7 +43,7 @@ while [ "$attempt" -lt "$MAX_RECOVERY_ATTEMPTS" ]; do
 
   if printf '%s\n' "$OUTPUT" | grep -q P3005; then
     echo "Baselining existing database (P3005)..."
-    prisma migrate resolve --applied 20260622000000_baseline
+    bunx prisma migrate resolve --applied 20260622000000_baseline
     continue
   fi
 
