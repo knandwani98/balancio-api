@@ -9,9 +9,6 @@ import type {
   TransactionType,
 } from "../types/database.js";
 import type { BudgetOccurrenceRow } from "../services/budgetOccurrenceService.js";
-import {
-  materializeNextBudgetOccurrenceAfterSettled,
-} from "../services/budgetMaterializationService.js";
 
 export class TransactionRepository {
   /** Sum of cleared income − expense on a bank account (no opening baseline). */
@@ -87,6 +84,7 @@ export class TransactionRepository {
     const rows = await prisma.transaction.findMany({
       where: {
         project_id: projectId,
+        OR: [{ budget_id: null }, { line_status: "cleared" }],
         ...(opts.from || opts.to
           ? {
               occurred_at: {
@@ -96,6 +94,25 @@ export class TransactionRepository {
             }
           : {}),
         ...(opts.type ? { type: opts.type } : {}),
+      },
+      orderBy: [
+        { occurred_at: "desc" },
+        { statement_order: { sort: "desc", nulls: "last" } },
+        { created_at: "desc" },
+      ],
+    });
+    return rows.map(toTransactionRow);
+  }
+
+  async listForBudget(
+    projectId: string,
+    budgetId: string
+  ): Promise<Database["public"]["Tables"]["transaction"]["Row"][]> {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        project_id: projectId,
+        budget_id: budgetId,
+        line_status: "cleared",
       },
       orderBy: [
         { occurred_at: "desc" },
@@ -131,6 +148,7 @@ export class TransactionRepository {
     const rows = await prisma.transaction.findMany({
       where: {
         budget_id: budgetId,
+        line_status: "cleared",
         due_date: {
           gte: parseISODateOnly(fromDue),
           lte: parseISODateOnly(toDue),
@@ -185,6 +203,16 @@ export class TransactionRepository {
     } satisfies BudgetOccurrenceRow;
   }
 
+  async deleteBudgetOccurrence(budgetId: string, dueDate: string): Promise<void> {
+    await prisma.transaction.deleteMany({
+      where: {
+        budget_id: budgetId,
+        due_date: parseISODateOnly(dueDate),
+        line_status: "pending",
+      },
+    });
+  }
+
   async upsertBudgetOccurrence(
     budget: Database["public"]["Tables"]["budget"]["Row"],
     projectId: string,
@@ -199,74 +227,57 @@ export class TransactionRepository {
     }
   ): Promise<BudgetOccurrenceRow> {
     const existing = await this.getBudgetOccurrenceByBudgetAndDueDate(budget.id, row.due_date);
+    const cleared =
+      row.line_status === "cleared" ||
+      (row.actual_amount != null && row.actual_amount !== undefined);
+    if (!cleared) {
+      throw new Error("Budget occurrence transactions are only created when payment is recorded");
+    }
+
     const planned =
       row.planned_amount !== undefined && row.planned_amount !== null
         ? row.planned_amount
         : (existing?.amount ?? budget.default_planned_amount);
     const actual =
-      row.actual_amount !== undefined ? row.actual_amount : existing?.line_status === "cleared"
-        ? existing.amount
-        : null;
-    const cleared =
-      row.line_status === "cleared" ||
-      (actual !== null && actual !== undefined && row.actual_amount !== undefined);
-    const amount = cleared && actual != null ? actual : planned;
-    const lineStatus: TransactionLineStatus =
-      row.line_status ?? (cleared ? "cleared" : (existing?.line_status ?? "pending"));
+      row.actual_amount != null ? row.actual_amount : (existing?.amount ?? planned);
+    const amount = actual ?? planned;
+    const lineStatus: TransactionLineStatus = "cleared";
     const dueDate = parseISODateOnly(row.due_date);
     const note = row.note !== undefined ? row.note : (existing?.note ?? null);
     const payment = budgetPaymentForTransaction(budget);
 
-    const upserted = await prisma.$transaction(async (trx) => {
-      const saved = await trx.transaction.upsert({
-        where: {
-          budget_id_due_date: {
-            budget_id: budget.id,
-            due_date: dueDate,
-          },
-        },
-        create: {
-          project_id: projectId,
-          created_by_user_id: userId,
-          user_id: userId,
-          type: transactionType,
-          name: budget.title,
-          amount: toPrismaDecimal(amount),
-          line_status: lineStatus,
-          payment_method: payment.payment_method,
-          occurred_at: dueDate,
-          category_id: budget.category_id,
-          note,
+    const upserted = await prisma.transaction.upsert({
+      where: {
+        budget_id_due_date: {
           budget_id: budget.id,
           due_date: dueDate,
-          bank_account_id: payment.bank_account_id,
-          card_id: payment.card_id,
-          wallet_id: payment.wallet_id,
         },
-        update: {
-          due_date: dueDate,
-          amount: toPrismaDecimal(amount),
-          line_status: lineStatus,
-          note,
-          occurred_at: dueDate,
-        },
-      });
-
-      if (lineStatus === "cleared" && existing?.line_status !== "cleared") {
-        const budgetEntity = await trx.budget.findUnique({ where: { id: budget.id } });
-        if (budgetEntity) {
-          await materializeNextBudgetOccurrenceAfterSettled(
-            trx,
-            budgetEntity,
-            projectId,
-            row.due_date,
-            userId,
-            transactionType
-          );
-        }
-      }
-
-      return saved;
+      },
+      create: {
+        project_id: projectId,
+        created_by_user_id: userId,
+        user_id: userId,
+        type: transactionType,
+        name: budget.title,
+        amount: toPrismaDecimal(amount),
+        line_status: lineStatus,
+        payment_method: payment.payment_method,
+        occurred_at: dueDate,
+        category_id: budget.category_id,
+        note,
+        budget_id: budget.id,
+        due_date: dueDate,
+        bank_account_id: payment.bank_account_id,
+        card_id: payment.card_id,
+        wallet_id: payment.wallet_id,
+      },
+      update: {
+        due_date: dueDate,
+        amount: toPrismaDecimal(amount),
+        line_status: lineStatus,
+        note,
+        occurred_at: dueDate,
+      },
     });
 
     const mapped = toTransactionRow(upserted);
@@ -304,28 +315,8 @@ export class TransactionRepository {
       return toTransactionRow(created);
     }
 
-    const createdRow = await prisma.$transaction(async (trx) => {
-      const created = await trx.transaction.create({ data });
-
-      if (created.line_status === "cleared" && created.due_date) {
-        const budget = await trx.budget.findUnique({ where: { id: created.budget_id! } });
-        if (budget) {
-          const dueIso = created.due_date.toISOString().slice(0, 10);
-          await materializeNextBudgetOccurrenceAfterSettled(
-            trx,
-            budget,
-            row.project_id,
-            dueIso,
-            row.user_id,
-            row.type
-          );
-        }
-      }
-
-      return created;
-    });
-
-    return toTransactionRow(createdRow);
+    const created = await prisma.transaction.create({ data });
+    return toTransactionRow(created);
   }
 
   async createMany(
@@ -395,45 +386,20 @@ export class TransactionRepository {
     if (!existing) return null;
 
     const nextStatus = body.line_status ?? existing.line_status;
-    const wasCleared = existing.line_status === "cleared";
-    const nowCleared = nextStatus === "cleared";
 
-    const updated = await prisma.$transaction(async (trx) => {
-      const row = await trx.transaction.update({
-        where: { id },
-        data: {
-          type: body.type,
-          name: body.name,
-          amount: toPrismaDecimal(body.amount),
-          line_status: nextStatus,
-          payment_method: body.payment_method ?? existing.payment_method,
-          occurred_at: parseISODateOnly(body.occurred_at),
-          category_id: body.category_id,
-          note: body.note,
-          reference_details: body.reference_details ?? null,
-        },
-      });
-
-      if (
-        !wasCleared &&
-        nowCleared &&
-        row.budget_id &&
-        row.due_date
-      ) {
-        const budget = await trx.budget.findUnique({ where: { id: row.budget_id } });
-        if (budget) {
-          await materializeNextBudgetOccurrenceAfterSettled(
-            trx,
-            budget,
-            projectId,
-            row.due_date.toISOString().slice(0, 10),
-            row.user_id,
-            row.type
-          );
-        }
-      }
-
-      return row;
+    const updated = await prisma.transaction.update({
+      where: { id },
+      data: {
+        type: body.type,
+        name: body.name,
+        amount: toPrismaDecimal(body.amount),
+        line_status: nextStatus,
+        payment_method: body.payment_method ?? existing.payment_method,
+        occurred_at: parseISODateOnly(body.occurred_at),
+        category_id: body.category_id,
+        note: body.note,
+        reference_details: body.reference_details ?? null,
+      },
     });
 
     return toTransactionRow(updated);

@@ -199,26 +199,14 @@ function computeDailyOccurrences(
 }
 
 function computeOneTimeOccurrences(
-  budget: Pick<
-    BudgetRow,
-    | "id"
-    | "start_date"
-    | "recurrence_end_date"
-    | "due_day_of_occurence"
-    | "default_planned_amount"
-  >,
+  budget: Pick<BudgetRow, "id" | "start_date" | "default_planned_amount">,
   rangeStartISO: string,
   rangeEndISO: string
 ): Omit<MergedOccurrence, "source" | "occurrence_id">[] {
-  const budgetStart = parseISODate(budget.start_date);
-  const rangeA = parseISODate(rangeStartISO);
-  const rangeB = parseISODate(rangeEndISO);
-  if (budgetStart.getTime() < rangeA.getTime() || budgetStart.getTime() > rangeB.getTime()) {
+  const due_date = budget.start_date;
+  if (due_date < rangeStartISO || due_date > rangeEndISO) {
     return [];
   }
-  const y = budgetStart.getUTCFullYear();
-  const m = budgetStart.getUTCMonth();
-  const due_date = toISODate(dueDateInMonth(y, m, budget.due_day_of_occurence));
   const out: Omit<MergedOccurrence, "source" | "occurrence_id">[] = [];
   pushOccurrence(budget, due_date, out);
   return out;
@@ -298,6 +286,7 @@ export function mergeOccurrences(
     if (!db) {
       return {
         ...v,
+        schedule_status: deriveScheduleStatus("pending", v.due_date),
         source: "virtual" as const,
         occurrence_id: null,
       };

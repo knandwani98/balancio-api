@@ -5,13 +5,9 @@ import type { TransactionRepository } from "../repositories/transactionRepositor
 import type { CategoryRepository } from "../repositories/categoryRepository.js";
 import type { ProjectRepository } from "../repositories/projectRepository.js";
 import { parsePaginationQuery } from "../lib/pagination.js";
-import {
-  computeOccurrences,
-  mergeOccurrences,
-  mergedOccurrenceFromDbRow,
-} from "../services/budgetOccurrenceService.js";
-import { backfillBudgetOccurrencesOnCreate } from "../services/budgetMaterializationService.js";
+import { computeOccurrences, mergeOccurrences } from "../services/budgetOccurrenceService.js";
 import type { TransactionType } from "../types/database.js";
+import { utcTodayISO } from "../utils/dates.js";
 import { createBudgetSchema, patchOccurrenceSchema, updateBudgetSchema } from "../models/schemas.js";
 import { assertProjectMember } from "../lib/projectAuthz.js";
 import { normalizePaymentRefs } from "../lib/normalizePayment.js";
@@ -68,8 +64,6 @@ export function budgetController(
         recurrence: parsed.data.recurrence,
         ...payment,
       });
-      const txType: TransactionType = cat.kind === "income" ? "income" : "expense";
-      await backfillBudgetOccurrencesOnCreate(row, req.userId, txType);
       res.status(201).json(row);
     },
     update: async (req: AuthedRequest, res: Response) => {
@@ -124,6 +118,18 @@ export function budgetController(
       await budgets.delete(projectId, budgetId);
       res.status(204).send();
     },
+    listTransactions: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
+      const budgetId = String(req.params.budgetId);
+      const budget = await budgets.getById(projectId, budgetId);
+      if (!budget) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
+      const rows = await transactions.listForBudget(projectId, budgetId);
+      res.json(rows);
+    },
     listOccurrences: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
       await assertProjectMember(req.userId, projectId);
@@ -149,13 +155,34 @@ export function budgetController(
         return;
       }
 
-      const { rows, total } = await transactions.listBudgetOccurrencesPaginated(budget.id, {
-        from,
-        to,
-        offset: pagination.offset,
-        limit: pagination.limit,
-      });
-      const items = rows.map((row) => mergedOccurrenceFromDbRow(budget, row));
+      const rangeFrom = from ?? budget.start_date;
+      const rangeTo = to ?? budget.recurrence_end_date ?? rangeFrom;
+      const capAtToday =
+        req.query.through === "today" || req.query.max_due === "today";
+      const todayIso = utcTodayISO();
+      const effectiveTo =
+        capAtToday && rangeTo > todayIso ? todayIso : rangeTo;
+      if (effectiveTo < rangeFrom) {
+        res.json({
+          items: [],
+          total: 0,
+          page: pagination.page,
+          offset: pagination.offset,
+          limit: pagination.limit,
+        });
+        return;
+      }
+      const virtual = computeOccurrences(budget, rangeFrom, effectiveTo);
+      const dbRows = await transactions.listBudgetOccurrencesInRange(
+        budget.id,
+        rangeFrom,
+        effectiveTo
+      );
+      const merged = mergeOccurrences(virtual, dbRows).sort((a, b) =>
+        b.due_date.localeCompare(a.due_date)
+      );
+      const total = merged.length;
+      const items = merged.slice(pagination.offset, pagination.offset + pagination.limit);
       res.json({
         items,
         total,
@@ -190,13 +217,23 @@ export function budgetController(
       const merged = mergeOccurrences(virtual, dbRows);
       const hit = merged.find((m) => m.due_date === dueDate);
 
+      if (parsed.data.actual_amount == null) {
+        const legacyPending = dbRows.find(
+          (r) => r.due_date === dueDate && r.line_status === "pending"
+        );
+        if (legacyPending) {
+          await transactions.deleteBudgetOccurrence(budget.id, dueDate);
+        }
+        res.json(hit);
+        return;
+      }
+
       await transactions.upsertBudgetOccurrence(budget, projectId, req.userId, txType, {
         due_date: dueDate,
         planned_amount: parsed.data.planned_amount,
         actual_amount: parsed.data.actual_amount,
         note: parsed.data.note,
-        line_status:
-          parsed.data.actual_amount != null ? "cleared" : undefined,
+        line_status: "cleared",
       });
 
       const refreshed = mergeOccurrences(
