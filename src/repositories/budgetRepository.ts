@@ -1,23 +1,30 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { parseISODateOnly, toBudgetRow } from "../lib/prismaMappers.js";
+import {
+  budgetPaymentInclude,
+  parseISODateOnly,
+  toBudgetApiRow,
+  type BudgetApiRow,
+} from "../lib/prismaMappers.js";
 import { toPrismaDecimal } from "../lib/money.js";
 import type { Database } from "../types/database.js";
 
 export class BudgetRepository {
-  async list(projectId: string): Promise<Database["public"]["Tables"]["budget"]["Row"][]> {
+  async list(projectId: string): Promise<BudgetApiRow[]> {
     const rows = await prisma.budget.findMany({
       where: { project_id: projectId },
       orderBy: { created_at: "desc" },
+      include: budgetPaymentInclude,
     });
-    return rows.map(toBudgetRow);
+    return rows.map(toBudgetApiRow);
   }
 
-  async getById(projectId: string, id: string) {
+  async getById(projectId: string, id: string): Promise<BudgetApiRow | null> {
     const row = await prisma.budget.findFirst({
       where: { project_id: projectId, id },
+      include: budgetPaymentInclude,
     });
-    return row ? toBudgetRow(row) : null;
+    return row ? toBudgetApiRow(row) : null;
   }
 
   async create(
@@ -44,7 +51,8 @@ export class BudgetRepository {
         wallet_id: input.wallet_id ?? null,
       },
     });
-    return toBudgetRow(row);
+    const enriched = await this.getById(projectId, row.id);
+    return enriched!;
   }
 
   async update(
@@ -79,7 +87,8 @@ export class BudgetRepository {
       where: { id },
       data,
     });
-    return toBudgetRow(row);
+    const enriched = await this.getById(projectId, row.id);
+    return enriched;
   }
 
   async delete(projectId: string, id: string) {

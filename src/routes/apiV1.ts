@@ -97,6 +97,10 @@ export function apiV1Router(deps: {
   pr.patch("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.update(req as AuthedRequest, res)));
   pr.delete("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.remove(req as AuthedRequest, res)));
   pr.get(
+    "/:projectId/budgets/:budgetId/transactions",
+    asyncHandler((req, res) => bud.listTransactions(req as AuthedRequest, res))
+  );
+  pr.get(
     "/:projectId/budgets/:budgetId/occurrences",
     asyncHandler((req, res) => bud.listOccurrences(req as AuthedRequest, res))
   );

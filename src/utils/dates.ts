@@ -17,6 +17,24 @@ export function startOfMonthUTC(year: number, monthIndex0: number): Date {
   return new Date(Date.UTC(year, monthIndex0, 1));
 }
 
+export function endOfMonthUTC(year: number, monthIndex0: number): Date {
+  return new Date(Date.UTC(year, monthIndex0 + 1, 0));
+}
+
+/**
+ * When the summary window starts on the 1st of the month containing `to`
+ * (e.g. month-to-date), expand budget occurrence totals through month-end
+ * so planned amounts match the budgets page for that calendar month.
+ */
+export function budgetPlanningRangeEnd(from: string, to: string): string {
+  const toDate = parseISODate(to);
+  const monthStart = startOfMonthUTC(toDate.getUTCFullYear(), toDate.getUTCMonth());
+  if (from === toISODate(monthStart)) {
+    return toISODate(endOfMonthUTC(toDate.getUTCFullYear(), toDate.getUTCMonth()));
+  }
+  return to;
+}
+
 export function addMonthsUTC(d: Date, n: number): Date {
   const y = d.getUTCFullYear();
   const m = d.getUTCMonth();

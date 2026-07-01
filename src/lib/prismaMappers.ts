@@ -1,6 +1,50 @@
 import type { Budget, Category, Transaction } from "@prisma/client";
 import type { Database, PaymentMethod } from "../types/database.js";
 
+export const budgetPaymentInclude = {
+  bank_account: { select: { bank_name: true, account_number: true } },
+  card: { select: { bank_name: true, last4: true } },
+  wallet: { select: { name: true, nickname: true } },
+} as const;
+
+export type BudgetWithPayment = Budget & {
+  bank_account: { bank_name: string; account_number: number } | null;
+  card: { bank_name: string; last4: string } | null;
+  wallet: { name: string; nickname: string | null } | null;
+};
+
+export function formatBudgetPaymentSourceLabel(
+  budget: Pick<Budget, "payment_method"> & {
+    bank_account: BudgetWithPayment["bank_account"];
+    card: BudgetWithPayment["card"];
+    wallet: BudgetWithPayment["wallet"];
+  }
+): string {
+  if (budget.bank_account) {
+    const tail = String(budget.bank_account.account_number).slice(-4);
+    return `${budget.bank_account.bank_name} (${tail})`;
+  }
+  if (budget.card) {
+    return `${budget.card.bank_name} ···${budget.card.last4}`;
+  }
+  if (budget.wallet) {
+    return budget.wallet.nickname?.trim() || budget.wallet.name;
+  }
+  if (budget.payment_method === "cash") return "Cash";
+  return budget.payment_method;
+}
+
+export type BudgetApiRow = Database["public"]["Tables"]["budget"]["Row"] & {
+  payment_source_label: string;
+};
+
+export function toBudgetApiRow(b: BudgetWithPayment): BudgetApiRow {
+  return {
+    ...toBudgetRow(b),
+    payment_source_label: formatBudgetPaymentSourceLabel(b),
+  };
+}
+
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }

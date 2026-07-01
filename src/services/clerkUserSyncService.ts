@@ -5,6 +5,7 @@ import type { UserRepository } from "../repositories/userRepository.js";
 
 export class ClerkUserSyncService {
   private readonly client: ReturnType<typeof createClerkClient>;
+  private readonly inflight = new Map<string, Promise<void>>();
 
   constructor(
     private readonly env: Env,
@@ -16,7 +17,24 @@ export class ClerkUserSyncService {
   /** Ensures a row exists for this Clerk user (first API call before webhooks). */
   async ensureUserExists(clerkUserId: string): Promise<void> {
     if (await this.users.exists(clerkUserId)) return;
-    const user = await this.client.users.getUser(clerkUserId);
-    await this.users.upsertFromClerk(clerkSdkUserToUpsert(user));
+
+    const existing = this.inflight.get(clerkUserId);
+    if (existing) {
+      await existing;
+      return;
+    }
+
+    const work = (async () => {
+      if (await this.users.exists(clerkUserId)) return;
+      const user = await this.client.users.getUser(clerkUserId);
+      await this.users.upsertFromClerk(clerkSdkUserToUpsert(user));
+    })();
+
+    this.inflight.set(clerkUserId, work);
+    try {
+      await work;
+    } finally {
+      this.inflight.delete(clerkUserId);
+    }
   }
 }
