@@ -420,6 +420,53 @@ export class TransactionRepository {
     return this.sumByTypeInRange(projectId, from, to);
   }
 
+  /** Sum of cleared transaction amounts linked to a budget (recorded budget payments). */
+  async sumClearedBudgetTransactionsInRange(
+    projectId: string,
+    from: string,
+    to: string
+  ): Promise<number> {
+    const byBudget = await this.sumClearedBudgetTransactionsByBudgetInRange(
+      projectId,
+      from,
+      to
+    );
+    let total = 0;
+    for (const amount of byBudget.values()) {
+      total += amount;
+    }
+    return total;
+  }
+
+  /** Cleared budget payment totals keyed by budget_id (occurred_at in range). */
+  async sumClearedBudgetTransactionsByBudgetInRange(
+    projectId: string,
+    from: string,
+    to: string
+  ): Promise<Map<string, number>> {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        project_id: projectId,
+        budget_id: { not: null },
+        line_status: "cleared",
+        occurred_at: {
+          gte: parseISODateOnly(from),
+          lte: parseISODateOnly(to),
+        },
+      },
+      select: { budget_id: true, amount: true },
+    });
+    const byBudget = new Map<string, number>();
+    for (const row of rows) {
+      if (!row.budget_id) continue;
+      byBudget.set(
+        row.budget_id,
+        (byBudget.get(row.budget_id) ?? 0) + row.amount.toNumber()
+      );
+    }
+    return byBudget;
+  }
+
   async sumByTypeInRange(projectId: string, from: string, to: string) {
     const rows = await prisma.transaction.findMany({
       where: {
@@ -438,7 +485,7 @@ export class TransactionRepository {
     for (const r of rows) {
       const n = r.amount.toNumber();
       if (r.type === "income") income += n;
-      else expense += n;
+      else if (r.type === "expense") expense += n;
     }
     return { income: income, expense: expense };
   }
