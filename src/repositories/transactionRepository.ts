@@ -9,6 +9,7 @@ import type {
   TransactionType,
 } from "../types/database.js";
 import type { BudgetOccurrenceRow } from "../services/budgetOccurrenceService.js";
+import { utcTodayISO } from "../utils/dates.js";
 
 export class TransactionRepository {
   /** Sum of cleared income − expense on a bank account (no opening baseline). */
@@ -75,6 +76,37 @@ export class TransactionRepository {
     const baseline = wallet?.current_balance.toNumber() ?? 0;
     const txnNet = await this.computeClearedTransactionNetForWallet(walletId, projectId);
     return baseline + txnNet;
+  }
+
+  /** Credit-card outstanding: cleared expenses minus payments (income). */
+  async computeCreditCardOutstanding(cardId: string, projectId?: string): Promise<number> {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        card_id: cardId,
+        line_status: "cleared",
+        ...(projectId ? { project_id: projectId } : {}),
+      },
+      select: { type: true, amount: true },
+    });
+    const raw = rows.reduce((sum, row) => {
+      const amount = row.amount.toNumber();
+      return sum + (row.type === "expense" ? amount : -amount);
+    }, 0);
+    return Math.max(0, raw);
+  }
+
+  /** Unpaid bill/recharge occurrences that are due or overdue. */
+  async sumDueAndOverdueBills(projectId: string): Promise<number> {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        project_id: projectId,
+        budget_id: { not: null },
+        line_status: { not: "cleared" },
+        due_date: { lte: parseISODateOnly(utcTodayISO()) },
+      },
+      select: { amount: true },
+    });
+    return rows.reduce((sum, row) => sum + row.amount.toNumber(), 0);
   }
 
   async list(

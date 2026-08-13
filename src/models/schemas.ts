@@ -142,7 +142,7 @@ export const networthQuerySchema = z.object({
         .filter(Boolean);
       return parts.length > 0 ? parts : (["investments"] as const);
     })
-    .pipe(z.array(z.enum(["investments", "banks", "insurance"]))),
+    .pipe(z.array(z.enum(["investments", "banks", "insurance", "cards", "bills"]))),
 });
 
 export const createProjectSchema = z.object({
