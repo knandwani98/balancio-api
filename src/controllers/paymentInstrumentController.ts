@@ -18,81 +18,98 @@ import { assertProjectMember } from "../lib/projectAuthz.js";
 import { getCardType, getLast4 } from "../utils/cardBrand.js";
 
 /**
- * User-scoped payment instruments. PCI: full card numbers are not persisted; see createCardSchema
- * and getCardType() — only last4 + brand are stored.
+ * Payment instruments scoped to projects (banks, cards). Wallets remain user-scoped.
+ * PCI: full card numbers are not persisted; see createCardSchema and getCardType().
  */
 export function paymentInstrumentController(
   repo: PaymentInstrumentRepository,
   transactions: TransactionRepository
 ) {
+  async function loadProjectBankAccounts(
+    req: AuthedRequest,
+    res: Response,
+    importableOnly: boolean
+  ) {
+    const projectId = String(req.params.projectId);
+    await assertProjectMember(req.userId, projectId);
+    const rows = importableOnly
+      ? await repo.listImportableBankAccounts(projectId)
+      : await repo.listBankAccounts(projectId);
+    const enriched = await Promise.all(
+      rows.map(async (row) => ({
+        ...toBankAccountRow(row),
+        current_balance: await transactions.computeNetBalanceForBankAccount(row.id, projectId),
+      }))
+    );
+    res.json(enriched);
+  }
+
   return {
-    listBanks: async (req: AuthedRequest, res: Response) => {
-      const rows = await repo.listBankAccounts(req.userId);
-      const enriched = await Promise.all(
-        rows.map(async (row) => ({
-          ...toBankAccountRow(row),
-          current_balance: await transactions.computeNetBalanceForBankAccount(row.id),
-        }))
-      );
-      res.json(enriched);
-    },
     listBanksForProject: async (req: AuthedRequest, res: Response) => {
+      const importableOnly =
+        req.query.importable === "true" || req.query.importable === "1";
+      await loadProjectBankAccounts(req, res, importableOnly);
+    },
+    createBankForProject: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
       await assertProjectMember(req.userId, projectId);
-      const rows = await repo.listImportableBankAccounts(req.userId);
-      const enriched = await Promise.all(
-        rows.map(async (row) => ({
-          ...toBankAccountRow(row),
-          current_balance: await transactions.computeNetBalanceForBankAccount(
-            row.id,
-            projectId
-          ),
-        }))
-      );
-      res.json(enriched);
-    },
-    createBank: async (req: AuthedRequest, res: Response) => {
       const parsed = createBankAccountSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      const row = await repo.createBankAccount(req.userId, parsed.data);
+      const row = await repo.createBankAccount(req.userId, projectId, parsed.data);
       res.status(201).json(toBankAccountRow(row));
     },
-    updateBank: async (req: AuthedRequest, res: Response) => {
+    updateBankForProject: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
       const parsed = updateBankAccountSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      const n = await repo.updateBankAccount(req.userId, String(req.params.id), parsed.data);
+      const n = await repo.updateBankAccount(
+        projectId,
+        String(req.params.id),
+        parsed.data
+      );
       if (n.count === 0) {
         res.status(404).json({ error: "Not found" });
         return;
       }
       res.json({ ok: true });
     },
-    adjustBankBalance: async (req: AuthedRequest, res: Response) => {
+    adjustBankBalanceForProject: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
       const parsed = adjustBankBalanceSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
       const bankAccountId = String(req.params.id);
-      const account = await repo.getBankAccountForUser(req.userId, bankAccountId);
+      const account = await repo.getBankAccountForProject(projectId, bankAccountId);
       if (!account) {
         res.status(404).json({ error: "Not found" });
         return;
       }
-      const txnNet = await transactions.computeClearedTransactionNetForBankAccount(bankAccountId);
+      const txnNet = await transactions.computeClearedTransactionNetForBankAccount(
+        bankAccountId,
+        projectId
+      );
       const ledgerBaseline = parsed.data.balance - txnNet;
-      await repo.setBankAccountLedgerBaseline(req.userId, bankAccountId, ledgerBaseline);
-      const current_balance = await transactions.computeNetBalanceForBankAccount(bankAccountId);
+      await repo.setBankAccountLedgerBaseline(projectId, bankAccountId, ledgerBaseline);
+      const current_balance = await transactions.computeNetBalanceForBankAccount(
+        bankAccountId,
+        projectId
+      );
       res.json({ ok: true, current_balance });
     },
-    deleteBank: async (req: AuthedRequest, res: Response) => {
-      const n = await repo.deleteBankAccount(req.userId, String(req.params.id));
+    deleteBankForProject: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
+      const n = await repo.deleteBankAccount(projectId, String(req.params.id));
       if (n.count === 0) {
         res.status(404).json({ error: "Not found" });
         return;
@@ -100,11 +117,15 @@ export function paymentInstrumentController(
       res.status(204).send();
     },
 
-    listCards: async (req: AuthedRequest, res: Response) => {
-      const rows = await repo.listCards(req.userId);
+    listCardsForProject: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
+      const rows = await repo.listCards(projectId);
       res.json(rows);
     },
-    createCard: async (req: AuthedRequest, res: Response) => {
+    createCardForProject: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
       const parsed = createCardSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.flatten() });
@@ -113,7 +134,7 @@ export function paymentInstrumentController(
       const d = parsed.data;
       const pan = d.number_for_brand_detection;
       const brand = d.brand ?? getCardType(pan);
-      const row = await repo.createCard(req.userId, {
+      const row = await repo.createCard(req.userId, projectId, {
         bank_id: d.bank_id ?? null,
         bank_name: d.bank_name,
         card_type: d.card_type,
@@ -123,7 +144,9 @@ export function paymentInstrumentController(
       });
       res.status(201).json(row);
     },
-    updateCard: async (req: AuthedRequest, res: Response) => {
+    updateCardForProject: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
       const parsed = updateCardSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.flatten() });
@@ -161,15 +184,17 @@ export function paymentInstrumentController(
         res.status(400).json({ error: "No updates" });
         return;
       }
-      const n = await repo.updateCard(req.userId, String(req.params.id), patch);
+      const n = await repo.updateCard(projectId, String(req.params.id), patch);
       if (n.count === 0) {
         res.status(404).json({ error: "Not found" });
         return;
       }
       res.json({ ok: true });
     },
-    deleteCard: async (req: AuthedRequest, res: Response) => {
-      const n = await repo.deleteCard(req.userId, String(req.params.id));
+    deleteCardForProject: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
+      const n = await repo.deleteCard(projectId, String(req.params.id));
       if (n.count === 0) {
         res.status(404).json({ error: "Not found" });
         return;

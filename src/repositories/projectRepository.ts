@@ -49,7 +49,13 @@ export class ProjectRepository {
 
   async updateProject(
     projectId: string,
-    patch: { name?: string; description?: string | null; icon_url?: string | null; is_archive?: boolean }
+    patch: {
+      name?: string;
+      description?: string | null;
+      icon_url?: string | null;
+      currency_code?: string;
+      is_archive?: boolean;
+    }
   ) {
     return prisma.project.update({
       where: { id: projectId },
@@ -57,6 +63,7 @@ export class ProjectRepository {
         ...(patch.name !== undefined && { name: patch.name }),
         ...(patch.description !== undefined && { description: patch.description }),
         ...(patch.icon_url !== undefined && { icon_url: patch.icon_url }),
+        ...(patch.currency_code !== undefined && { currency_code: patch.currency_code }),
         ...(patch.is_archive !== undefined && { is_archive: patch.is_archive }),
       },
     });

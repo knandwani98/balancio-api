@@ -151,10 +151,26 @@ export const createProjectSchema = z.object({
   icon_url: z.string().url().optional().nullable(),
 });
 
+export const projectCurrencyCodeSchema = z.enum([
+  "USD",
+  "EUR",
+  "GBP",
+  "INR",
+  "JPY",
+  "CAD",
+  "AUD",
+  "CHF",
+  "CNY",
+  "SGD",
+  "AED",
+  "HKD",
+]);
+
 export const updateProjectSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional().nullable(),
   icon_url: z.string().url().optional().nullable(),
+  currency_code: projectCurrencyCodeSchema.optional(),
   is_archive: z.boolean().optional(),
 });
 

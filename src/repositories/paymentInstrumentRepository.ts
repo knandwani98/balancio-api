@@ -2,37 +2,42 @@ import { prisma } from "../lib/prisma.js";
 import { bankById } from "../data/banks.js";
 import { toPrismaDecimal } from "../lib/money.js";
 
+const IMPORTABLE_BANK_FILTER = {
+  OR: [
+    { bank_id: { in: ["kotak", "boi"] } },
+    { bank_name: { equals: "Kotak Mahindra Bank", mode: "insensitive" as const } },
+    { bank_name: { equals: "Bank of India", mode: "insensitive" as const } },
+  ],
+};
+
 export class PaymentInstrumentRepository {
-  listBankAccounts(userId: string) {
+  listBankAccounts(projectId: string) {
     return prisma.bankAccount.findMany({
-      where: { createdBy: userId },
+      where: { project_id: projectId },
       orderBy: { created_at: "desc" },
     });
   }
 
-  /** User bank accounts that support statement import (Kotak, Bank of India). */
-  listImportableBankAccounts(userId: string) {
+  /** Project bank accounts that support statement import (Kotak, Bank of India). */
+  listImportableBankAccounts(projectId: string) {
     return prisma.bankAccount.findMany({
       where: {
-        createdBy: userId,
-        OR: [
-          { bank_id: { in: ["kotak", "boi"] } },
-          { bank_name: { equals: "Kotak Mahindra Bank", mode: "insensitive" } },
-          { bank_name: { equals: "Bank of India", mode: "insensitive" } },
-        ],
+        project_id: projectId,
+        ...IMPORTABLE_BANK_FILTER,
       },
       orderBy: { created_at: "desc" },
     });
   }
 
-  getBankAccountForUser(userId: string, id: string) {
+  getBankAccountForProject(projectId: string, id: string) {
     return prisma.bankAccount.findFirst({
-      where: { id, createdBy: userId },
+      where: { id, project_id: projectId },
     });
   }
 
   createBankAccount(
     userId: string,
+    projectId: string,
     input: {
       bank_id?: string | null;
       bank_name: string;
@@ -47,6 +52,7 @@ export class PaymentInstrumentRepository {
     const icon_url = input.icon_url ?? catalog?.logo_url ?? null;
     return prisma.bankAccount.create({
       data: {
+        project_id: projectId,
         createdBy: userId,
         bank_id: input.bank_id ?? null,
         bank_name: input.bank_name,
@@ -62,15 +68,15 @@ export class PaymentInstrumentRepository {
   }
 
   /** Ledger opening balance (before summed cleared transactions). */
-  setBankAccountLedgerBaseline(userId: string, id: string, baseline: number) {
+  setBankAccountLedgerBaseline(projectId: string, id: string, baseline: number) {
     return prisma.bankAccount.updateMany({
-      where: { id, createdBy: userId },
+      where: { id, project_id: projectId },
       data: { current_balance: toPrismaDecimal(baseline) },
     });
   }
 
   updateBankAccount(
-    userId: string,
+    projectId: string,
     id: string,
     patch: {
       bank_id?: string | null;
@@ -87,24 +93,31 @@ export class PaymentInstrumentRepository {
       data.current_balance = toPrismaDecimal(patch.current_balance);
     }
     return prisma.bankAccount.updateMany({
-      where: { id, createdBy: userId },
+      where: { id, project_id: projectId },
       data,
     });
   }
 
-  deleteBankAccount(userId: string, id: string) {
-    return prisma.bankAccount.deleteMany({ where: { id, createdBy: userId } });
+  deleteBankAccount(projectId: string, id: string) {
+    return prisma.bankAccount.deleteMany({ where: { id, project_id: projectId } });
   }
 
-  listCards(userId: string) {
+  listCards(projectId: string) {
     return prisma.card.findMany({
-      where: { user_id: userId },
+      where: { project_id: projectId },
       orderBy: { created_at: "desc" },
+    });
+  }
+
+  getCardForProject(projectId: string, id: string) {
+    return prisma.card.findFirst({
+      where: { id, project_id: projectId },
     });
   }
 
   createCard(
     userId: string,
+    projectId: string,
     input: {
       bank_id?: string | null;
       bank_name: string;
@@ -119,6 +132,7 @@ export class PaymentInstrumentRepository {
     const icon_url = input.icon_url ?? catalog?.logo_url ?? null;
     return prisma.card.create({
       data: {
+        project_id: projectId,
         user_id: userId,
         bank_id: input.bank_id ?? null,
         bank_name: input.bank_name,
@@ -132,7 +146,7 @@ export class PaymentInstrumentRepository {
   }
 
   updateCard(
-    userId: string,
+    projectId: string,
     id: string,
     patch: {
       bank_id?: string | null;
@@ -145,13 +159,13 @@ export class PaymentInstrumentRepository {
     }
   ) {
     return prisma.card.updateMany({
-      where: { id, user_id: userId },
+      where: { id, project_id: projectId },
       data: patch,
     });
   }
 
-  deleteCard(userId: string, id: string) {
-    return prisma.card.deleteMany({ where: { id, user_id: userId } });
+  deleteCard(projectId: string, id: string) {
+    return prisma.card.deleteMany({ where: { id, project_id: projectId } });
   }
 
   listWallets(userId: string) {

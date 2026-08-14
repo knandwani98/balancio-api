@@ -11,12 +11,15 @@ import { utcTodayISO } from "../utils/dates.js";
 import { createBudgetSchema, patchOccurrenceSchema, updateBudgetSchema } from "../models/schemas.js";
 import { assertProjectMember } from "../lib/projectAuthz.js";
 import { normalizePaymentRefs } from "../lib/normalizePayment.js";
+import { assertPaymentRefsForProject } from "../lib/validateProjectPaymentRefs.js";
+import type { PaymentInstrumentRepository } from "../repositories/paymentInstrumentRepository.js";
 
 export function budgetController(
   budgets: BudgetRepository,
   transactions: TransactionRepository,
   categories: CategoryRepository,
-  projects: ProjectRepository
+  projects: ProjectRepository,
+  paymentInstruments: PaymentInstrumentRepository
 ) {
   return {
     list: async (req: AuthedRequest, res: Response) => {
@@ -54,6 +57,9 @@ export function budgetController(
         card_id: parsed.data.card_id,
         wallet_id: parsed.data.wallet_id,
       });
+      if (!(await assertPaymentRefsForProject(projectId, payment, paymentInstruments, res))) {
+        return;
+      }
       const row = await budgets.create(projectId, req.userId, {
         category_id: parsed.data.category_id,
         title: parsed.data.title,
@@ -98,6 +104,9 @@ export function budgetController(
             wallet_id: patch.wallet_id,
           })
         );
+        if (!(await assertPaymentRefsForProject(projectId, patch, paymentInstruments, res))) {
+          return;
+        }
       }
       const row = await budgets.update(projectId, budgetId, patch);
       if (!row) {

@@ -24,6 +24,7 @@ export function projectController(projects: ProjectRepository, users: UserReposi
           name: p.name,
           description: p.description,
           icon_url: p.icon_url,
+          currency_code: p.currency_code,
           is_archive: p.is_archive,
           created_by_user_id: p.created_by_user_id,
           created_at: p.created_at,
@@ -64,13 +65,27 @@ export function projectController(projects: ProjectRepository, users: UserReposi
 
     update: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
-      await assertProjectAdmin(req.userId, projectId);
       const parsed = updateProjectSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      const p = await projects.updateProject(projectId, parsed.data);
+
+      const patch = parsed.data;
+      const currencyOnly =
+        patch.currency_code !== undefined &&
+        patch.name === undefined &&
+        patch.description === undefined &&
+        patch.icon_url === undefined &&
+        patch.is_archive === undefined;
+
+      if (currencyOnly) {
+        await assertProjectMember(req.userId, projectId);
+      } else {
+        await assertProjectAdmin(req.userId, projectId);
+      }
+
+      const p = await projects.updateProject(projectId, patch);
       res.json(p);
     },
 

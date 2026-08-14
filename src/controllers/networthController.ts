@@ -47,7 +47,7 @@ export function networthController(
       }
 
       if (sections.has("banks")) {
-        const bankAccounts = await paymentInstruments.listBankAccounts(req.userId);
+        const bankAccounts = await paymentInstruments.listBankAccounts(projectId);
         const bankBalances = await Promise.all(
           bankAccounts.map(async (account) =>
             transactions.computeNetBalanceForBankAccount(account.id, projectId)
@@ -65,7 +65,7 @@ export function networthController(
       }
 
       if (sections.has("cards")) {
-        const creditCards = (await paymentInstruments.listCards(req.userId)).filter(
+        const creditCards = (await paymentInstruments.listCards(projectId)).filter(
           (card) => card.card_type === "credit"
         );
         const cardBalances = await Promise.all(
