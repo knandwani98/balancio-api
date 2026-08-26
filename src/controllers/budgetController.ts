@@ -8,15 +8,18 @@ import { parsePaginationQuery } from "../lib/pagination.js";
 import { computeOccurrences, mergeOccurrences } from "../services/budgetOccurrenceService.js";
 import type { TransactionType } from "../types/database.js";
 import { utcTodayISO } from "../utils/dates.js";
-import { createBudgetSchema, patchOccurrenceSchema, updateBudgetSchema } from "../models/schemas.js";
+import { createBudgetSchema, importBudgetsSchema, patchOccurrenceSchema, updateBudgetSchema } from "../models/schemas.js";
 import { assertProjectMember } from "../lib/projectAuthz.js";
 import { normalizePaymentRefs } from "../lib/normalizePayment.js";
+import { assertPaymentRefsForProject } from "../lib/validateProjectPaymentRefs.js";
+import type { PaymentInstrumentRepository } from "../repositories/paymentInstrumentRepository.js";
 
 export function budgetController(
   budgets: BudgetRepository,
   transactions: TransactionRepository,
-  categories: CategoryRepository,
-  projects: ProjectRepository
+  categoryRepo: CategoryRepository,
+  projects: ProjectRepository,
+  paymentInstruments: PaymentInstrumentRepository
 ) {
   return {
     list: async (req: AuthedRequest, res: Response) => {
@@ -43,7 +46,7 @@ export function budgetController(
         res.status(400).json({ error: parsed.error.flatten() });
         return;
       }
-      const cat = await categories.getById(projectId, parsed.data.category_id);
+      const cat = await categoryRepo.getById(projectId, parsed.data.category_id);
       if (!cat) {
         res.status(400).json({ error: "Invalid category_id" });
         return;
@@ -54,6 +57,9 @@ export function budgetController(
         card_id: parsed.data.card_id,
         wallet_id: parsed.data.wallet_id,
       });
+      if (!(await assertPaymentRefsForProject(projectId, payment, paymentInstruments, res))) {
+        return;
+      }
       const row = await budgets.create(projectId, req.userId, {
         category_id: parsed.data.category_id,
         title: parsed.data.title,
@@ -76,7 +82,7 @@ export function budgetController(
         return;
       }
       if (parsed.data.category_id) {
-        const cat = await categories.getById(projectId, parsed.data.category_id);
+        const cat = await categoryRepo.getById(projectId, parsed.data.category_id);
         if (!cat) {
           res.status(400).json({ error: "Invalid category_id" });
           return;
@@ -98,6 +104,9 @@ export function budgetController(
             wallet_id: patch.wallet_id,
           })
         );
+        if (!(await assertPaymentRefsForProject(projectId, patch, paymentInstruments, res))) {
+          return;
+        }
       }
       const row = await budgets.update(projectId, budgetId, patch);
       if (!row) {
@@ -117,6 +126,54 @@ export function budgetController(
       }
       await budgets.delete(projectId, budgetId);
       res.status(204).send();
+    },
+    importMany: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
+
+      const parsed = importBudgetsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      const items = [];
+      for (let i = 0; i < parsed.data.budgets.length; i++) {
+        const row = parsed.data.budgets[i]!;
+        const sheetRow = i + 1;
+        const cat = await categoryRepo.getById(projectId, row.category_id);
+        if (!cat || cat.kind === "neutral") {
+          res.status(400).json({
+            error: "Invalid import",
+            details: [{ row: sheetRow, message: "Invalid category" }],
+          });
+          return;
+        }
+        const pm = row.payment_method ?? "cash";
+        const payment = normalizePaymentRefs(pm, {
+          bank_account_id: row.bank_account_id,
+          card_id: row.card_id,
+          wallet_id: row.wallet_id,
+        });
+        if (!(await assertPaymentRefsForProject(projectId, payment, paymentInstruments, res))) {
+          return;
+        }
+        items.push({
+          category_id: row.category_id,
+          title: row.title,
+          default_planned_amount: row.default_planned_amount,
+          start_date: row.start_date,
+          recurrence_end_date: row.recurrence_end_date ?? null,
+          due_day_of_occurence: row.due_day_of_occurence,
+          recurrence: row.recurrence,
+          ...payment,
+        });
+      }
+
+      const result = await budgets.importMany(projectId, req.userId, items, {
+        replaceAll: parsed.data.replace_all,
+      });
+      res.status(201).json(result);
     },
     listTransactions: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
@@ -199,7 +256,7 @@ export function budgetController(
         res.status(404).json({ error: "Not found" });
         return;
       }
-      const cat = await categories.getById(projectId, budget.category_id);
+      const cat = await categoryRepo.getById(projectId, budget.category_id);
       const txType: TransactionType = cat?.kind === "income" ? "income" : "expense";
 
       const dueDate = String(req.params.dueDate);

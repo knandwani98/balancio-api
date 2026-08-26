@@ -112,6 +112,7 @@ model Project {
   name               String
   description        String?
   icon_url           String?
+  currency_code      String   @default("USD")
   is_archive         Boolean  @default(false)
   created_by_user_id String
   created_at         DateTime @default(now()) @db.Timestamptz(6)
@@ -124,6 +125,8 @@ model Project {
   budgets              Budget[]
   transactions         Transaction[]
   investment_plans     InvestmentPlan[]
+  bank_accounts        BankAccount[]
+  cards                Card[]
 
   @@index([created_by_user_id])
   @@map("project")
@@ -260,6 +263,7 @@ model Transaction {
 
 model BankAccount {
   id              String          @id @default(uuid()) @db.Uuid
+  project_id      String          @db.Uuid
   createdBy       String          @map("created_by")
   bank_id         String?
   bank_name       String
@@ -271,16 +275,19 @@ model BankAccount {
   created_at      DateTime @default(now()) @db.Timestamptz(6)
   updated_at      DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
+  project      Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
   creator      User          @relation("BankAccountCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   transactions Transaction[]
   budgets      Budget[]
 
+  @@index([project_id])
   @@index([createdBy])
   @@map("bank_account")
 }
 
 model Card {
   id         String          @id @default(uuid()) @db.Uuid
+  project_id String          @db.Uuid
   user_id    String
   bank_id    String?
   bank_name  String
@@ -292,10 +299,12 @@ model Card {
   created_at DateTime        @default(now()) @db.Timestamptz(6)
   updated_at DateTime        @default(now()) @updatedAt @db.Timestamptz(6)
 
+  project      Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
   user         User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
   transactions Transaction[]
   budgets      Budget[]
 
+  @@index([project_id])
   @@index([user_id])
   @@map("card")
 }

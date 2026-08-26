@@ -56,6 +56,10 @@ if (env.CLERK_WEBHOOK_SIGNING_SECRET) {
 
 app.use(express.json());
 
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
 const internal = internalController(env, budgets);
 
 /** Cron-friendly stub: GET /internal/due-soon?user_id=<clerk_user_id> — optional X-Cron-Secret or ?secret= if INTERNAL_CRON_SECRET is set. No DB writes. */

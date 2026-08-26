@@ -36,7 +36,7 @@ export function apiV1Router(deps: {
   const prof = userProfileController(deps.users);
   const cat = categoryController(deps.categories, deps.projects);
   const tx = transactionController(deps.transactions, deps.categories, deps.paymentInstruments);
-  const bud = budgetController(deps.budgets, deps.transactions, deps.categories, deps.projects);
+  const bud = budgetController(deps.budgets, deps.transactions, deps.categories, deps.projects, deps.paymentInstruments);
   const sum = summaryController(deps.analytics, deps.projects);
   const inv = investmentPlanController(deps.investmentPlans);
   const networth = networthController(
@@ -70,6 +70,39 @@ export function apiV1Router(deps: {
     "/:projectId/bank-accounts",
     asyncHandler((req, res) => pay.listBanksForProject(req as AuthedRequest, res))
   );
+  pr.post(
+    "/:projectId/bank-accounts",
+    asyncHandler((req, res) => pay.createBankForProject(req as AuthedRequest, res))
+  );
+  pr.patch(
+    "/:projectId/bank-accounts/:id",
+    asyncHandler((req, res) => pay.updateBankForProject(req as AuthedRequest, res))
+  );
+  pr.patch(
+    "/:projectId/bank-accounts/:id/adjust-balance",
+    asyncHandler((req, res) => pay.adjustBankBalanceForProject(req as AuthedRequest, res))
+  );
+  pr.delete(
+    "/:projectId/bank-accounts/:id",
+    asyncHandler((req, res) => pay.deleteBankForProject(req as AuthedRequest, res))
+  );
+
+  pr.get(
+    "/:projectId/cards",
+    asyncHandler((req, res) => pay.listCardsForProject(req as AuthedRequest, res))
+  );
+  pr.post(
+    "/:projectId/cards",
+    asyncHandler((req, res) => pay.createCardForProject(req as AuthedRequest, res))
+  );
+  pr.patch(
+    "/:projectId/cards/:id",
+    asyncHandler((req, res) => pay.updateCardForProject(req as AuthedRequest, res))
+  );
+  pr.delete(
+    "/:projectId/cards/:id",
+    asyncHandler((req, res) => pay.deleteCardForProject(req as AuthedRequest, res))
+  );
 
   pr.get("/:projectId/transactions", asyncHandler((req, res) => tx.list(req as AuthedRequest, res)));
   pr.post("/:projectId/transactions", asyncHandler((req, res) => tx.create(req as AuthedRequest, res)));
@@ -93,6 +126,10 @@ export function apiV1Router(deps: {
 
   pr.get("/:projectId/budgets", asyncHandler((req, res) => bud.list(req as AuthedRequest, res)));
   pr.post("/:projectId/budgets", asyncHandler((req, res) => bud.create(req as AuthedRequest, res)));
+  pr.post(
+    "/:projectId/budgets/import",
+    asyncHandler((req, res) => bud.importMany(req as AuthedRequest, res))
+  );
   pr.get("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.get(req as AuthedRequest, res)));
   pr.patch("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.update(req as AuthedRequest, res)));
   pr.delete("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.remove(req as AuthedRequest, res)));
@@ -206,26 +243,11 @@ export function apiV1Router(deps: {
     res.json(BANK_CATALOG);
   });
 
-  r.get("/bank-accounts", asyncHandler((req, res) => pay.listBanks(req as AuthedRequest, res)));
-  r.post("/bank-accounts", asyncHandler((req, res) => pay.createBank(req as AuthedRequest, res)));
-  r.patch("/bank-accounts/:id", asyncHandler((req, res) => pay.updateBank(req as AuthedRequest, res)));
-  r.patch(
-    "/bank-accounts/:id/adjust-balance",
-    asyncHandler((req, res) => pay.adjustBankBalance(req as AuthedRequest, res))
-  );
-  r.delete("/bank-accounts/:id", asyncHandler((req, res) => pay.deleteBank(req as AuthedRequest, res)));
-
-  r.get("/cards", asyncHandler((req, res) => pay.listCards(req as AuthedRequest, res)));
-  r.post("/cards", asyncHandler((req, res) => pay.createCard(req as AuthedRequest, res)));
-  r.patch("/cards/:id", asyncHandler((req, res) => pay.updateCard(req as AuthedRequest, res)));
-  r.delete("/cards/:id", asyncHandler((req, res) => pay.deleteCard(req as AuthedRequest, res)));
-
   r.get("/wallets", asyncHandler((req, res) => pay.listWallets(req as AuthedRequest, res)));
   r.post("/wallets", asyncHandler((req, res) => pay.createWallet(req as AuthedRequest, res)));
   r.patch("/wallets/:id", asyncHandler((req, res) => pay.updateWallet(req as AuthedRequest, res)));
   r.delete("/wallets/:id", asyncHandler((req, res) => pay.deleteWallet(req as AuthedRequest, res)));
 
-  r.get("/me/profile-complete", asyncHandler((req, res) => prof.profileComplete(req as AuthedRequest, res)));
   r.get("/me", asyncHandler((req, res) => prof.getMe(req as AuthedRequest, res)));
   r.patch("/me", asyncHandler((req, res) => prof.patchMe(req as AuthedRequest, res)));
 

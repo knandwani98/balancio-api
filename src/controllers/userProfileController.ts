@@ -2,7 +2,6 @@ import type { Response } from "express";
 import type { AuthedRequest } from "../middleware/clerkAuth.js";
 import { patchMyProfileSchema } from "../models/schemas.js";
 import type { UserRepository } from "../repositories/userRepository.js";
-import { isProfileComplete } from "../lib/profileComplete.js";
 
 export function userProfileController(users: UserRepository) {
   return {
@@ -40,15 +39,6 @@ export function userProfileController(users: UserRepository) {
         username: row.username,
         avatar_url: row.avatar_url,
       });
-    },
-
-    profileComplete: async (req: AuthedRequest, res: Response) => {
-      const u = await users.findById(req.userId);
-      if (!u) {
-        res.status(404).json({ error: "User not found" });
-        return;
-      }
-      res.json({ complete: isProfileComplete(u) });
     },
   };
 }

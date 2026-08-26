@@ -12,6 +12,7 @@ import type { StatementImportBankId } from "../services/statementImport/types.js
 import type { ParsedStatementResult } from "../services/statementImport/types.js";
 import { assertProjectMember } from "../lib/projectAuthz.js";
 import { normalizePaymentRefs } from "../lib/normalizePayment.js";
+import { assertPaymentRefsForProject } from "../lib/validateProjectPaymentRefs.js";
 import { extractPdfText } from "../services/statementImport/extractPdfText.js";
 import {
   isImportableBankAccount,
@@ -26,7 +27,7 @@ type ImportAccountContext = {
 };
 
 async function resolveImportAccount(
-  userId: string,
+  projectId: string,
   bankAccountIdRaw: string,
   paymentInstruments: PaymentInstrumentRepository,
   res: Response
@@ -37,7 +38,7 @@ async function resolveImportAccount(
     return null;
   }
 
-  const account = await paymentInstruments.getBankAccountForUser(userId, bankAccountId);
+  const account = await paymentInstruments.getBankAccountForProject(projectId, bankAccountId);
   if (!account) {
     res.status(400).json({ error: "Invalid bank account" });
     return null;
@@ -104,6 +105,9 @@ export function transactionController(
         card_id: body.card_id,
         wallet_id: body.wallet_id,
       });
+      if (!(await assertPaymentRefsForProject(projectId, payment, paymentInstruments, res))) {
+        return;
+      }
       const row = await tx.create({
         project_id: projectId,
         created_by_user_id: req.userId,
@@ -205,7 +209,7 @@ export function transactionController(
 
       if (bankAccountIdRaw) {
         const ctx = await resolveImportAccount(
-          req.userId,
+          projectId,
           bankAccountIdRaw,
           paymentInstruments,
           res
@@ -271,7 +275,7 @@ export function transactionController(
         (a, b) => (a.statement_order ?? 0) - (b.statement_order ?? 0)
       );
       const ctx = await resolveImportAccount(
-        req.userId,
+        projectId,
         bankAccountId,
         paymentInstruments,
         res
@@ -330,8 +334,8 @@ export function transactionController(
       } else if (statementOpening != null) {
         ledgerBaseline = statementOpening;
       } else {
-        const account = await paymentInstruments.getBankAccountForUser(
-          req.userId,
+        const account = await paymentInstruments.getBankAccountForProject(
+          projectId,
           ctx.bankAccountId
         );
         ledgerBaseline =
@@ -341,7 +345,7 @@ export function transactionController(
       }
 
       await paymentInstruments.setBankAccountLedgerBaseline(
-        req.userId,
+        projectId,
         ctx.bankAccountId,
         ledgerBaseline
       );
