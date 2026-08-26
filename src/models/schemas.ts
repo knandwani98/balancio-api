@@ -111,6 +111,11 @@ export const createBudgetSchema = createBudgetSchemaBase.superRefine(budgetPayme
 
 export const updateBudgetSchema = createBudgetSchemaBase.partial().superRefine(budgetPaymentRefine);
 
+export const importBudgetsSchema = z.object({
+  replace_all: z.boolean().optional().default(false),
+  budgets: z.array(createBudgetSchema).min(1, "Select at least one budget").max(500),
+});
+
 export const patchOccurrenceSchema = z.object({
   planned_amount: amountNonNegative.optional().nullable(),
   actual_amount: amountNonNegative.optional().nullable(),
@@ -129,21 +134,6 @@ export const summaryQuerySchema = z
     message: "from must be on or before to",
     path: ["from"],
   });
-
-export const networthQuerySchema = z.object({
-  sections: z
-    .string()
-    .optional()
-    .transform((value) => {
-      if (!value?.trim()) return ["investments"] as const;
-      const parts = value
-        .split(",")
-        .map((part) => part.trim())
-        .filter(Boolean);
-      return parts.length > 0 ? parts : (["investments"] as const);
-    })
-    .pipe(z.array(z.enum(["investments", "banks", "insurance", "cards", "bills"]))),
-});
 
 export const createProjectSchema = z.object({
   name: z.string().min(1),

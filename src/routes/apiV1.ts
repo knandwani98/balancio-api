@@ -126,6 +126,10 @@ export function apiV1Router(deps: {
 
   pr.get("/:projectId/budgets", asyncHandler((req, res) => bud.list(req as AuthedRequest, res)));
   pr.post("/:projectId/budgets", asyncHandler((req, res) => bud.create(req as AuthedRequest, res)));
+  pr.post(
+    "/:projectId/budgets/import",
+    asyncHandler((req, res) => bud.importMany(req as AuthedRequest, res))
+  );
   pr.get("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.get(req as AuthedRequest, res)));
   pr.patch("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.update(req as AuthedRequest, res)));
   pr.delete("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.remove(req as AuthedRequest, res)));
@@ -244,7 +248,6 @@ export function apiV1Router(deps: {
   r.patch("/wallets/:id", asyncHandler((req, res) => pay.updateWallet(req as AuthedRequest, res)));
   r.delete("/wallets/:id", asyncHandler((req, res) => pay.deleteWallet(req as AuthedRequest, res)));
 
-  r.get("/me/profile-complete", asyncHandler((req, res) => prof.profileComplete(req as AuthedRequest, res)));
   r.get("/me", asyncHandler((req, res) => prof.getMe(req as AuthedRequest, res)));
   r.patch("/me", asyncHandler((req, res) => prof.patchMe(req as AuthedRequest, res)));
 
