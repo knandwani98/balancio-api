@@ -191,6 +191,26 @@ export class TransactionRepository {
     return this.mapBudgetOccurrenceRows(rows);
   }
 
+  async listProjectBudgetOccurrencesInRange(
+    projectId: string,
+    fromDue: string,
+    toDue: string
+  ): Promise<BudgetOccurrenceRow[]> {
+    const rows = await prisma.transaction.findMany({
+      where: {
+        project_id: projectId,
+        budget_id: { not: null },
+        line_status: "cleared",
+        due_date: {
+          gte: parseISODateOnly(fromDue),
+          lte: parseISODateOnly(toDue),
+        },
+      },
+      orderBy: { due_date: "asc" },
+    });
+    return this.mapBudgetOccurrenceRows(rows);
+  }
+
   async listBudgetOccurrencesPaginated(
     budgetId: string,
     opts: { from?: string; to?: string; offset: number; limit: number }
