@@ -8,7 +8,6 @@ import {
   updateProjectSchema,
 } from "../models/schemas.js";
 import { assertProjectAdmin, assertProjectMember } from "../lib/projectAuthz.js";
-import { isProfileComplete } from "../lib/profileComplete.js";
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -35,14 +34,6 @@ export function projectController(projects: ProjectRepository, users: UserReposi
     },
 
     create: async (req: AuthedRequest, res: Response) => {
-      const u = await users.findById(req.userId);
-      if (!u || !isProfileComplete(u)) {
-        res.status(400).json({
-          error: "Profile incomplete",
-          detail: "Require first name, last name, phone number, and avatar.",
-        });
-        return;
-      }
       const parsed = createProjectSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.flatten() });
@@ -99,11 +90,6 @@ export function projectController(projects: ProjectRepository, users: UserReposi
     invite: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
       await assertProjectAdmin(req.userId, projectId);
-      const u = await users.findById(req.userId);
-      if (!u || !isProfileComplete(u)) {
-        res.status(400).json({ error: "Profile incomplete" });
-        return;
-      }
       const parsed = inviteEmailSchema.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.flatten() });

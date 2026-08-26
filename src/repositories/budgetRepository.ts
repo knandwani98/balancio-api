@@ -96,4 +96,44 @@ export class BudgetRepository {
       where: { project_id: projectId, id },
     });
   }
+
+  async importMany(
+    projectId: string,
+    createdByUserId: string,
+    items: Omit<
+      Database["public"]["Tables"]["budget"]["Insert"],
+      "project_id" | "created_by_user_id"
+    >[],
+    options: { replaceAll: boolean }
+  ): Promise<{ imported: number; deleted: number }> {
+    return prisma.$transaction(async (tx) => {
+      let deleted = 0;
+      if (options.replaceAll) {
+        const result = await tx.budget.deleteMany({ where: { project_id: projectId } });
+        deleted = result.count;
+      }
+      if (items.length > 0) {
+        await tx.budget.createMany({
+          data: items.map((input) => ({
+            project_id: projectId,
+            created_by_user_id: createdByUserId,
+            category_id: input.category_id,
+            title: input.title,
+            default_planned_amount: toPrismaDecimal(input.default_planned_amount),
+            start_date: parseISODateOnly(input.start_date),
+            recurrence_end_date: input.recurrence_end_date
+              ? parseISODateOnly(input.recurrence_end_date)
+              : null,
+            due_day_of_occurence: input.due_day_of_occurence,
+            recurrence: input.recurrence ?? "monthly",
+            payment_method: input.payment_method ?? "cash",
+            bank_account_id: input.bank_account_id ?? null,
+            card_id: input.card_id ?? null,
+            wallet_id: input.wallet_id ?? null,
+          })),
+        });
+      }
+      return { imported: items.length, deleted };
+    });
+  }
 }

@@ -9,7 +9,7 @@ export class UserRepository {
       update: {
         email: data.email,
         email_verified: data.email_verified,
-        // Phone is set via PATCH /api/v1/me (onboarding). Do not overwrite from Clerk on
+        // Phone is set via PATCH /api/v1/me. Do not overwrite from Clerk on
         // user.updated — Clerk primary phone often lags or differs, which reverted saves.
         first_name: data.first_name,
         last_name: data.last_name,
