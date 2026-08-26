@@ -5,7 +5,7 @@ import type { TransactionRepository } from "../repositories/transactionRepositor
 import type { CategoryRepository } from "../repositories/categoryRepository.js";
 import type { ProjectRepository } from "../repositories/projectRepository.js";
 import { parsePaginationQuery } from "../lib/pagination.js";
-import { computeOccurrences, mergeOccurrences } from "../services/budgetOccurrenceService.js";
+import { computeOccurrences, mergeOccurrences, type MergedOccurrence } from "../services/budgetOccurrenceService.js";
 import type { TransactionType } from "../types/database.js";
 import { utcTodayISO } from "../utils/dates.js";
 import { createBudgetSchema, importBudgetsSchema, patchOccurrenceSchema, updateBudgetSchema } from "../models/schemas.js";
@@ -186,6 +186,42 @@ export function budgetController(
       }
       const rows = await transactions.listForBudget(projectId, budgetId);
       res.json(rows);
+    },
+    listProjectOccurrences: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      await assertProjectMember(req.userId, projectId);
+
+      const from = typeof req.query.from === "string" ? req.query.from : undefined;
+      const to = typeof req.query.to === "string" ? req.query.to : undefined;
+      if (!from || !/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+        res.status(400).json({ error: "Invalid from (YYYY-MM-DD)" });
+        return;
+      }
+      if (!to || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+        res.status(400).json({ error: "Invalid to (YYYY-MM-DD)" });
+        return;
+      }
+      if (to < from) {
+        res.json({ items: [] });
+        return;
+      }
+
+      const budgetList = await budgets.list(projectId);
+      const dbRows = await transactions.listProjectBudgetOccurrencesInRange(projectId, from, to);
+      const dbByBudget = new Map<string, typeof dbRows>();
+      for (const row of dbRows) {
+        const list = dbByBudget.get(row.budget_id) ?? [];
+        list.push(row);
+        dbByBudget.set(row.budget_id, list);
+      }
+
+      const items: MergedOccurrence[] = [];
+      for (const budget of budgetList) {
+        const virtual = computeOccurrences(budget, from, to);
+        items.push(...mergeOccurrences(virtual, dbByBudget.get(budget.id) ?? []));
+      }
+      items.sort((a, b) => b.due_date.localeCompare(a.due_date) || a.budget_id.localeCompare(b.budget_id));
+      res.json({ items });
     },
     listOccurrences: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);

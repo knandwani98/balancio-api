@@ -130,6 +130,10 @@ export function apiV1Router(deps: {
     "/:projectId/budgets/import",
     asyncHandler((req, res) => bud.importMany(req as AuthedRequest, res))
   );
+  pr.get(
+    "/:projectId/budgets/occurrences",
+    asyncHandler((req, res) => bud.listProjectOccurrences(req as AuthedRequest, res))
+  );
   pr.get("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.get(req as AuthedRequest, res)));
   pr.patch("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.update(req as AuthedRequest, res)));
   pr.delete("/:projectId/budgets/:budgetId", asyncHandler((req, res) => bud.remove(req as AuthedRequest, res)));
