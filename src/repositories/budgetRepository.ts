@@ -1,5 +1,9 @@
-import type { Prisma } from "@prisma/client";
+import type { PaymentMethod, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import {
+  budgetSourceFilterIsEmpty,
+  type BudgetPaymentSourceFilter,
+} from "../lib/budgetSourceQuery.js";
 import {
   budgetPaymentInclude,
   parseISODateOnly,
@@ -9,10 +13,51 @@ import {
 import { toPrismaDecimal } from "../lib/money.js";
 import type { Database } from "../types/database.js";
 
+function paymentSourceWhere(
+  filter: BudgetPaymentSourceFilter
+): Prisma.BudgetWhereInput {
+  const ors: Prisma.BudgetWhereInput[] = [];
+  if (filter.bankAccountIds.length > 0) {
+    ors.push({ bank_account_id: { in: filter.bankAccountIds } });
+  }
+  if (filter.cardIds.length > 0) {
+    ors.push({ card_id: { in: filter.cardIds } });
+  }
+  if (filter.walletIds.length > 0) {
+    ors.push({ wallet_id: { in: filter.walletIds } });
+  }
+  if (filter.includeCash) {
+    ors.push({
+      payment_method: "cash",
+      bank_account_id: null,
+      card_id: null,
+      wallet_id: null,
+    });
+  }
+  if (filter.paymentMethods.length > 0) {
+    ors.push({
+      payment_method: { in: filter.paymentMethods as PaymentMethod[] },
+      bank_account_id: null,
+      card_id: null,
+      wallet_id: null,
+    });
+  }
+  return { OR: ors };
+}
+
 export class BudgetRepository {
-  async list(projectId: string): Promise<BudgetApiRow[]> {
+  async list(
+    projectId: string,
+    sourceFilter?: BudgetPaymentSourceFilter
+  ): Promise<BudgetApiRow[]> {
+    if (sourceFilter && budgetSourceFilterIsEmpty(sourceFilter)) {
+      return [];
+    }
     const rows = await prisma.budget.findMany({
-      where: { project_id: projectId },
+      where: {
+        project_id: projectId,
+        ...(sourceFilter ? paymentSourceWhere(sourceFilter) : {}),
+      },
       orderBy: { created_at: "desc" },
       include: budgetPaymentInclude,
     });

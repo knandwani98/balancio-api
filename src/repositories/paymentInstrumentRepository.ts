@@ -126,6 +126,9 @@ export class PaymentInstrumentRepository {
       brand: string;
       nickname?: string | null;
       icon_url?: string | null;
+      credit_limit?: number | null;
+      statement_day?: number | null;
+      payment_day?: number | null;
     }
   ) {
     const catalog = input.bank_id ? bankById(input.bank_id) : undefined;
@@ -141,6 +144,10 @@ export class PaymentInstrumentRepository {
         brand: input.brand,
         nickname: input.nickname ?? null,
         icon_url,
+        credit_limit:
+          input.credit_limit != null ? toPrismaDecimal(input.credit_limit) : null,
+        statement_day: input.statement_day ?? null,
+        payment_day: input.payment_day ?? null,
       },
     });
   }
@@ -156,11 +163,19 @@ export class PaymentInstrumentRepository {
       brand?: string;
       nickname?: string | null;
       icon_url?: string | null;
+      credit_limit?: number | null;
+      statement_day?: number | null;
+      payment_day?: number | null;
     }
   ) {
+    const data: Record<string, unknown> = { ...patch };
+    if (patch.credit_limit !== undefined) {
+      data.credit_limit =
+        patch.credit_limit == null ? null : toPrismaDecimal(patch.credit_limit);
+    }
     return prisma.card.updateMany({
       where: { id, project_id: projectId },
-      data: patch,
+      data,
     });
   }
 

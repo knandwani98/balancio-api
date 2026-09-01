@@ -3,13 +3,13 @@ import type { Database, PaymentMethod } from "../types/database.js";
 
 export const budgetPaymentInclude = {
   bank_account: { select: { bank_name: true, account_number: true } },
-  card: { select: { bank_name: true, last4: true } },
+  card: { select: { bank_name: true, last4: true, nickname: true, brand: true } },
   wallet: { select: { name: true, nickname: true } },
 } as const;
 
 export type BudgetWithPayment = Budget & {
   bank_account: { bank_name: string; account_number: number } | null;
-  card: { bank_name: string; last4: string } | null;
+  card: { bank_name: string; last4: string; nickname: string | null; brand: string } | null;
   wallet: { name: string; nickname: string | null } | null;
 };
 
@@ -25,7 +25,8 @@ export function formatBudgetPaymentSourceLabel(
     return `${budget.bank_account.bank_name} (${tail})`;
   }
   if (budget.card) {
-    return `${budget.card.bank_name} ···${budget.card.last4}`;
+    const name = budget.card.nickname?.trim() || budget.card.brand;
+    return `${name} ···${budget.card.last4}`;
   }
   if (budget.wallet) {
     return budget.wallet.nickname?.trim() || budget.wallet.name;
