@@ -48,8 +48,7 @@ export const BANK_CATALOG: readonly BankCatalogEntry[] = [
   {
     id: "boi",
     name: "Bank of India",
-    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779121377/boi_zp6u4z.png",
-    // logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1779120365/boi_pzxirt.png",
+    logo_url: "https://res.cloudinary.com/dsnxu6br1/image/upload/v1788262008/boi_zp6u4z_lseelt.png",
   },
   {
     id: "canara",
