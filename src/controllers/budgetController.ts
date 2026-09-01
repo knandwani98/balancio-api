@@ -12,6 +12,7 @@ import { createBudgetSchema, importBudgetsSchema, patchOccurrenceSchema, updateB
 import { assertProjectMember } from "../lib/projectAuthz.js";
 import { normalizePaymentRefs } from "../lib/normalizePayment.js";
 import { assertPaymentRefsForProject } from "../lib/validateProjectPaymentRefs.js";
+import { parseBudgetSourceQuery } from "../lib/budgetSourceQuery.js";
 import type { PaymentInstrumentRepository } from "../repositories/paymentInstrumentRepository.js";
 
 export function budgetController(
@@ -25,7 +26,8 @@ export function budgetController(
     list: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
       await assertProjectMember(req.userId, projectId);
-      const rows = await budgets.list(projectId);
+      const sourceFilter = parseBudgetSourceQuery(req.query as Record<string, unknown>);
+      const rows = await budgets.list(projectId, sourceFilter);
       res.json(rows);
     },
     get: async (req: AuthedRequest, res: Response) => {
@@ -202,12 +204,16 @@ export function budgetController(
         return;
       }
       if (to < from) {
-        res.json({ items: [] });
+        res.json({ items: [], paid_by_budget: {} });
         return;
       }
 
-      const budgetList = await budgets.list(projectId);
-      const dbRows = await transactions.listProjectBudgetOccurrencesInRange(projectId, from, to);
+      const sourceFilter = parseBudgetSourceQuery(req.query as Record<string, unknown>);
+      const [budgetList, dbRows, paidByBudget] = await Promise.all([
+        budgets.list(projectId, sourceFilter),
+        transactions.listProjectBudgetOccurrencesInRange(projectId, from, to),
+        transactions.sumClearedBudgetTransactionsByBudgetInRange(projectId, from, to),
+      ]);
       const dbByBudget = new Map<string, typeof dbRows>();
       for (const row of dbRows) {
         const list = dbByBudget.get(row.budget_id) ?? [];
@@ -221,7 +227,10 @@ export function budgetController(
         items.push(...mergeOccurrences(virtual, dbByBudget.get(budget.id) ?? []));
       }
       items.sort((a, b) => b.due_date.localeCompare(a.due_date) || a.budget_id.localeCompare(b.budget_id));
-      res.json({ items });
+      res.json({
+        items,
+        paid_by_budget: Object.fromEntries(paidByBudget),
+      });
     },
     listOccurrences: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);

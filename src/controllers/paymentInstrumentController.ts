@@ -13,9 +13,28 @@ import {
 } from "../models/schemas.js";
 import { bankById } from "../data/banks.js";
 import { toBankAccountRow } from "../lib/bankAccountMapper.js";
+import { toCardRow } from "../lib/cardMapper.js";
 import { toWalletRow } from "../lib/walletMapper.js";
 import { assertProjectMember } from "../lib/projectAuthz.js";
 import { getCardType, getLast4 } from "../utils/cardBrand.js";
+
+function creditFieldsForType(
+  cardType: "credit" | "debit",
+  input: {
+    credit_limit?: number | null;
+    statement_day?: number | null;
+    payment_day?: number | null;
+  }
+) {
+  if (cardType === "debit") {
+    return { credit_limit: null, statement_day: null, payment_day: null };
+  }
+  return {
+    credit_limit: input.credit_limit ?? null,
+    statement_day: input.statement_day ?? null,
+    payment_day: input.payment_day ?? null,
+  };
+}
 
 /**
  * Payment instruments scoped to projects (banks, cards). Wallets remain user-scoped.
@@ -121,7 +140,7 @@ export function paymentInstrumentController(
       const projectId = String(req.params.projectId);
       await assertProjectMember(req.userId, projectId);
       const rows = await repo.listCards(projectId);
-      res.json(rows);
+      res.json(rows.map(toCardRow));
     },
     createCardForProject: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
@@ -141,8 +160,9 @@ export function paymentInstrumentController(
         last4: getLast4(pan),
         brand,
         nickname: d.nickname,
+        ...creditFieldsForType(d.card_type, d),
       });
-      res.status(201).json(row);
+      res.status(201).json(toCardRow(row));
     },
     updateCardForProject: async (req: AuthedRequest, res: Response) => {
       const projectId = String(req.params.projectId);
@@ -153,6 +173,11 @@ export function paymentInstrumentController(
         return;
       }
       const d = parsed.data;
+      const existing = await repo.getCardForProject(projectId, String(req.params.id));
+      if (!existing) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
       const patch: {
         bank_id?: string | null;
         bank_name?: string;
@@ -161,6 +186,9 @@ export function paymentInstrumentController(
         brand?: string;
         nickname?: string | null;
         icon_url?: string | null;
+        credit_limit?: number | null;
+        statement_day?: number | null;
+        payment_day?: number | null;
       } = {};
       if (d.bank_id !== undefined) {
         patch.bank_id = d.bank_id ?? null;
@@ -179,6 +207,16 @@ export function paymentInstrumentController(
         const pan = d.number_for_brand_detection;
         patch.brand = getCardType(pan);
         patch.last4 = getLast4(pan);
+      }
+      const nextType = d.card_type ?? existing.card_type;
+      if (nextType === "debit") {
+        patch.credit_limit = null;
+        patch.statement_day = null;
+        patch.payment_day = null;
+      } else {
+        if (d.credit_limit !== undefined) patch.credit_limit = d.credit_limit;
+        if (d.statement_day !== undefined) patch.statement_day = d.statement_day;
+        if (d.payment_day !== undefined) patch.payment_day = d.payment_day;
       }
       if (Object.keys(patch).length === 0) {
         res.status(400).json({ error: "No updates" });

@@ -376,6 +376,8 @@ export const adjustBankBalanceSchema = z.object({
  * PCI: never persist full card numbers. Optional `number_for_brand_detection` is used in-memory only
  * with getCardType(); only last4 + brand are stored.
  */
+const dayOfMonth = z.number().int().min(1).max(31);
+
 export const createCardSchema = z.object({
   bank_id: z.string().min(1).optional().nullable(),
   bank_name: z.string().min(1),
@@ -383,6 +385,9 @@ export const createCardSchema = z.object({
   brand: z.string().min(1).optional(),
   nickname: z.string().optional().nullable(),
   number_for_brand_detection: z.string().min(12).max(22),
+  credit_limit: amountNonNegative.optional().nullable(),
+  statement_day: dayOfMonth.optional().nullable(),
+  payment_day: dayOfMonth.optional().nullable(),
 });
 
 export const updateCardSchema = z.object({
@@ -392,6 +397,9 @@ export const updateCardSchema = z.object({
   nickname: z.string().optional().nullable(),
   /** If set, `brand` and `last4` are recomputed from PAN (full number is not stored). */
   number_for_brand_detection: z.string().min(12).max(22).optional(),
+  credit_limit: amountNonNegative.optional().nullable(),
+  statement_day: dayOfMonth.optional().nullable(),
+  payment_day: dayOfMonth.optional().nullable(),
 });
 
 export const createWalletSchema = z.object({
