@@ -524,6 +524,151 @@ export class InvestmentPlanRepository {
     return true;
   }
 
+  async importHoldings(
+    projectId: string,
+    planId: string,
+    funds: {
+      name: string;
+      badge: string;
+      badge_class_name: string;
+      fund_type: string;
+      asset_type: string;
+      invested: number;
+      current_value: number;
+      current_nav: number | null;
+      orders: {
+        txn_date: Date;
+        nav: number;
+        units: number;
+        amount: number;
+        invested: number;
+      }[];
+    }[],
+    options: { replaceAll: boolean }
+  ) {
+    return prisma.$transaction(
+      async (tx) => {
+        const plan = await tx.investmentPlan.findFirst({
+          where: { id: planId, project_id: projectId },
+          select: { id: true },
+        });
+        if (!plan) return null;
+
+        let existing = await tx.planHolding.findMany({
+          where: { plan_id: planId },
+          include: {
+            transactions: {
+              select: { txn_date: true, nav: true, units: true, amount: true },
+            },
+          },
+        });
+
+        let deleted = 0;
+        if (options.replaceAll) {
+          const result = await tx.planHolding.deleteMany({ where: { plan_id: planId } });
+          deleted = result.count;
+          existing = [];
+        }
+
+        const holdingByName = new Map(
+          existing.map((row) => [
+            row.name.trim().toLowerCase(),
+            {
+              id: row.id,
+              txnKeys: new Set(
+                row.transactions.map(
+                  (txn) =>
+                    `${txn.txn_date.toISOString().slice(0, 10)}|${txn.nav.toNumber().toFixed(6)}|${txn.units.toNumber().toFixed(6)}|${txn.amount.toNumber().toFixed(6)}`
+                )
+              ),
+            },
+          ])
+        );
+
+        let added = 0;
+        let skipped = 0;
+        let ordersAdded = 0;
+        let ordersSkipped = 0;
+        let sortOrder = options.replaceAll ? 0 : existing.length;
+
+        for (const fund of funds) {
+          const key = fund.name.trim().toLowerCase();
+          let holding = holdingByName.get(key);
+          if (!holding) {
+            const created = await tx.planHolding.create({
+              data: {
+                plan_id: planId,
+                name: fund.name,
+                badge: fund.badge,
+                badge_class_name: fund.badge_class_name,
+                fund_type: fund.fund_type,
+                asset_type: fund.asset_type,
+                broker: "other",
+                broker_name: "MF Central",
+                invested: fund.invested,
+                current_value: fund.current_value,
+                current_nav: fund.current_nav,
+                sort_order: sortOrder,
+              },
+            });
+            sortOrder += 1;
+            holding = { id: created.id, txnKeys: new Set() };
+            holdingByName.set(key, holding);
+            added += 1;
+          } else {
+            skipped += 1;
+          }
+
+          const toInsert: {
+            holding_id: string;
+            txn_date: Date;
+            nav: number;
+            units: number;
+            amount: number;
+            invested: number;
+          }[] = [];
+          for (const order of fund.orders) {
+            const txnKey = `${order.txn_date.toISOString().slice(0, 10)}|${order.nav.toFixed(6)}|${order.units.toFixed(6)}|${order.amount.toFixed(6)}`;
+            if (holding.txnKeys.has(txnKey)) {
+              ordersSkipped += 1;
+              continue;
+            }
+            holding.txnKeys.add(txnKey);
+            toInsert.push({
+              holding_id: holding.id,
+              txn_date: order.txn_date,
+              nav: order.nav,
+              units: order.units,
+              amount: order.amount,
+              invested: order.invested,
+            });
+          }
+
+          if (toInsert.length > 0) {
+            await tx.planHoldingTransaction.createMany({ data: toInsert });
+            ordersAdded += toInsert.length;
+            await this.recalculateHoldingAggregates(holding.id, tx);
+          }
+        }
+
+        const holdings = await tx.planHolding.findMany({
+          where: { plan_id: planId },
+          orderBy: { name: "asc" },
+        });
+
+        return {
+          added,
+          skipped,
+          deleted,
+          orders_added: ordersAdded,
+          orders_skipped: ordersSkipped,
+          holdings,
+        };
+      },
+      { timeout: 30000 }
+    );
+  }
+
   async listPlanTransactions(
     projectId: string,
     planId: string,

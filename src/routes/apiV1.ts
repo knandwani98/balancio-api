@@ -20,6 +20,7 @@ import type { InvestmentPlanRepository } from "../repositories/investmentPlanRep
 import type { PaymentInstrumentRepository } from "../repositories/paymentInstrumentRepository.js";
 import { BANK_CATALOG } from "../data/banks.js";
 import { statementUploadMiddleware } from "../middleware/statementUpload.js";
+import { excelUploadMiddleware } from "../middleware/excelUpload.js";
 
 export function apiV1Router(deps: {
   categories: CategoryRepository;
@@ -209,6 +210,15 @@ export function apiV1Router(deps: {
   pr.post(
     "/:projectId/investment-plans/:planId/holdings",
     asyncHandler((req, res) => inv.createHolding(req as AuthedRequest, res))
+  );
+  pr.post(
+    "/:projectId/investment-plans/:planId/holdings/import/preview",
+    excelUploadMiddleware,
+    asyncHandler((req, res) => inv.previewImportHoldings(req as AuthedRequest, res))
+  );
+  pr.post(
+    "/:projectId/investment-plans/:planId/holdings/import/confirm",
+    asyncHandler((req, res) => inv.confirmImportHoldings(req as AuthedRequest, res))
   );
   pr.get(
     "/:projectId/investment-plans/:planId/holdings/:holdingId",

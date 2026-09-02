@@ -18,6 +18,14 @@ export function fundNameToInitials(name: string): string {
   return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
 }
 
+export function badgeColorForSeed(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return FUND_BADGE_COLORS[Math.abs(hash) % FUND_BADGE_COLORS.length];
+}
+
 export function randomBadgeColor(): string {
   return FUND_BADGE_COLORS[Math.floor(Math.random() * FUND_BADGE_COLORS.length)];
 }
