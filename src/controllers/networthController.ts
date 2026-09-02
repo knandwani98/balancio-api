@@ -39,7 +39,13 @@ export function networthController(
       const liabilities = cardsTotal + billsTotal;
       const networth = assets - liabilities;
 
-      res.json({ assets, liabilities, networth });
+      res.json({
+        assets,
+        liabilities,
+        networth,
+        investments: investments.total_value,
+        banks: banksTotal,
+      });
     },
   };
 }
