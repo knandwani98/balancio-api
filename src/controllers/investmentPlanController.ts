@@ -594,7 +594,7 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
         return;
       }
 
-      const existing = await plans.listHoldings(projectId, planId);
+      const existing = await plans.listHoldings(projectId, planId, { includeClosed: true });
       if (!existing) {
         res.status(404).json({ error: "Plan not found" });
         return;

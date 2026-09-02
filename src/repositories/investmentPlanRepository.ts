@@ -35,6 +35,49 @@ export type PlanWithPoints = Prisma.InvestmentPlanGetPayload<{ include: typeof p
 
 export type PlanListItem = Awaited<ReturnType<InvestmentPlanRepository["list"]>>[number];
 
+/** Treat leftover dust from round-trips as a closed position. */
+const OPEN_HOLDING_UNITS_EPSILON = 1e-8;
+
+function remainingUnitsMap(
+  grouped: { holding_id: string; _sum: { units: Prisma.Decimal | null } }[]
+) {
+  return new Map(
+    grouped.map((row) => [row.holding_id, row._sum.units?.toNumber() ?? 0] as const)
+  );
+}
+
+/** Open = remaining units, or no ledger yet (newly added / imported without orders). */
+function isOpenHolding(holdingId: string, unitsByHolding: Map<string, number>) {
+  if (!unitsByHolding.has(holdingId)) return true;
+  return unitsByHolding.get(holdingId)! > OPEN_HOLDING_UNITS_EPSILON;
+}
+
+function sortHoldings<T extends { name: string; invested: { toNumber(): number }; current_value: { toNumber(): number } }>(
+  rows: T[],
+  sort: string
+) {
+  const copy = [...rows];
+  if (sort === "invested") {
+    return copy.sort((a, b) => b.invested.toNumber() - a.invested.toNumber());
+  }
+  if (sort === "current") {
+    return copy.sort((a, b) => b.current_value.toNumber() - a.current_value.toNumber());
+  }
+  if (sort === "pnl" || sort === "pnl_pct") {
+    return copy.sort((a, b) => {
+      const investedA = a.invested.toNumber();
+      const investedB = b.invested.toNumber();
+      const pnlA = a.current_value.toNumber() - investedA;
+      const pnlB = b.current_value.toNumber() - investedB;
+      if (sort === "pnl") return pnlB - pnlA;
+      const pctA = investedA > 0 ? pnlA / investedA : 0;
+      const pctB = investedB > 0 ? pnlB / investedB : 0;
+      return pctB - pctA;
+    });
+  }
+  return copy.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export class InvestmentPlanRepository {
   async list(projectId: string) {
     return prisma.investmentPlan.findMany({
@@ -335,6 +378,7 @@ export class InvestmentPlanRepository {
     options?: {
       sort?: string;
       fundTypes?: string[];
+      includeClosed?: boolean;
     }
   ) {
     const plan = await prisma.investmentPlan.findFirst({
@@ -350,47 +394,21 @@ export class InvestmentPlanRepository {
         : {}),
     };
 
-    const sort = options?.sort ?? "default";
-
-    if (sort === "name" || sort === "default") {
-      return prisma.planHolding.findMany({
-        where,
-        orderBy: { name: "asc" },
-      });
+    const rows = await prisma.planHolding.findMany({ where });
+    if (options?.includeClosed) {
+      return sortHoldings(rows, options?.sort ?? "default");
     }
 
-    if (sort === "invested") {
-      return prisma.planHolding.findMany({
-        where,
-        orderBy: { invested: "desc" },
-      });
-    }
-
-    if (sort === "current") {
-      return prisma.planHolding.findMany({
-        where,
-        orderBy: { current_value: "desc" },
-      });
-    }
-
-    if (sort === "pnl" || sort === "pnl_pct") {
-      const rows = await prisma.planHolding.findMany({ where });
-      return rows.sort((a, b) => {
-        const investedA = a.invested.toNumber();
-        const investedB = b.invested.toNumber();
-        const pnlA = a.current_value.toNumber() - investedA;
-        const pnlB = b.current_value.toNumber() - investedB;
-        if (sort === "pnl") return pnlB - pnlA;
-        const pctA = investedA > 0 ? pnlA / investedA : 0;
-        const pctB = investedB > 0 ? pnlB / investedB : 0;
-        return pctB - pctA;
-      });
-    }
-
-    return prisma.planHolding.findMany({
-      where,
-      orderBy: { name: "asc" },
+    const unitSums = await prisma.planHoldingTransaction.groupBy({
+      by: ["holding_id"],
+      where: { holding: { plan_id: planId } },
+      _sum: { units: true },
     });
+    const unitsByHolding = remainingUnitsMap(unitSums);
+    return sortHoldings(
+      rows.filter((row) => isOpenHolding(row.id, unitsByHolding)),
+      options?.sort ?? "default"
+    );
   }
 
   async getHolding(projectId: string, planId: string, holdingId: string) {
@@ -498,8 +516,7 @@ export class InvestmentPlanRepository {
       where: { holding_id: holdingId },
     });
     const totalUnits = txns.reduce((sum, row) => sum + row.units.toNumber(), 0);
-    const currentValue =
-      totalUnits > 0 ? totalUnits * nav : holding.current_value.toNumber();
+    const currentValue = totalUnits > 0 ? totalUnits * nav : 0;
 
     return prisma.planHolding.update({
       where: { id: holdingId },
@@ -857,15 +874,17 @@ export class InvestmentPlanRepository {
       holding?.current_nav != null && holding.current_nav.toNumber() > 0
         ? holding.current_nav.toNumber()
         : latestTxnNav;
-    const currentValue =
-      totalUnits > 0 && navForValue > 0
+    const hasOpenUnits = totalUnits > OPEN_HOLDING_UNITS_EPSILON;
+    const currentValue = hasOpenUnits
+      ? navForValue > 0
         ? totalUnits * navForValue
-        : totalInvestedAmount;
+        : totalInvestedAmount
+      : 0;
 
     await tx.planHolding.update({
       where: { id: holdingId },
       data: {
-        invested: totalInvestedAmount,
+        invested: hasOpenUnits ? totalInvestedAmount : 0,
         current_value: currentValue,
       },
     });
@@ -897,13 +916,21 @@ export class InvestmentPlanRepository {
     });
     if (!plan) return null;
 
-    const holdingAgg = await prisma.planHolding.aggregate({
-      where: { plan_id: planId },
-      _sum: { current_value: true, invested: true },
-    });
-
-    const totalValue = holdingAgg._sum.current_value?.toNumber() ?? 0;
-    const invested = holdingAgg._sum.invested?.toNumber() ?? 0;
+    const [holdings, unitSums] = await Promise.all([
+      prisma.planHolding.findMany({
+        where: { plan_id: planId },
+        select: { id: true, current_value: true, invested: true },
+      }),
+      prisma.planHoldingTransaction.groupBy({
+        by: ["holding_id"],
+        where: { holding: { plan_id: planId } },
+        _sum: { units: true },
+      }),
+    ]);
+    const unitsByHolding = remainingUnitsMap(unitSums);
+    const openHoldings = holdings.filter((row) => isOpenHolding(row.id, unitsByHolding));
+    const totalValue = openHoldings.reduce((sum, row) => sum + row.current_value.toNumber(), 0);
+    const invested = openHoldings.reduce((sum, row) => sum + row.invested.toNumber(), 0);
     const currentReturns = totalValue - invested;
     const returnsPct = invested > 0 ? (currentReturns / invested) * 100 : 0;
 
