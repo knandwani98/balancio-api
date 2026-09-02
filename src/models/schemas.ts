@@ -314,7 +314,7 @@ function withBrokerRefine<T extends z.ZodObject<z.ZodRawShape>>(schema: T) {
 
 export const createPlanHoldingSchema = withBrokerRefine(
   z.object({
-    name: z.string().trim().min(1).max(120),
+    name: z.string().trim().min(1).max(250),
     badge_class_name: z.string().trim().min(1).max(80).optional(),
     fund_type: z.enum(planFundTypeValues).optional(),
     asset_type: z.enum(planAssetTypeValues).optional(),
@@ -323,9 +323,31 @@ export const createPlanHoldingSchema = withBrokerRefine(
   })
 );
 
+export const importPlanHoldingOrderSchema = z.object({
+  txn_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  nav: amountNonNegative.refine((n) => n > 0, "nav must be greater than zero"),
+  units: z.number().refine((n) => n !== 0, "units must not be zero"),
+  amount: z.number().refine((n) => n !== 0, "amount must not be zero"),
+});
+
+export const importPlanHoldingFundSchema = z.object({
+  name: z.string().trim().min(1).max(250),
+  fund_type: z.enum(planFundTypeValues),
+  asset_type: z.enum(planAssetTypeValues),
+  invested: amountNonNegative.optional().default(0),
+  current_value: amountNonNegative.optional().default(0),
+  units: amountNonNegative.optional().default(0),
+  orders: z.array(importPlanHoldingOrderSchema).max(2000).optional().default([]),
+});
+
+export const confirmImportPlanHoldingsSchema = z.object({
+  replace_all: z.boolean().optional().default(false),
+  funds: z.array(importPlanHoldingFundSchema).min(1, "Select at least one fund").max(500),
+});
+
 export const updatePlanHoldingSchema = withBrokerRefine(
   z.object({
-    name: z.string().trim().min(1).max(120),
+    name: z.string().trim().min(1).max(250),
     fund_type: z.enum(planFundTypeValues).optional(),
     asset_type: z.enum(planAssetTypeValues).optional(),
     ...planHoldingAssetFields,

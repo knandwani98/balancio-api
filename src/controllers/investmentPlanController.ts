@@ -1,8 +1,9 @@
 import type { BudgetRecurrence } from "@prisma/client";
 import type { Response } from "express";
-import type { AuthedRequest } from "../middleware/clerkAuth.js";
+import type { AuthedFileRequest, AuthedRequest } from "../middleware/clerkAuth.js";
 import type { InvestmentPlanRepository } from "../repositories/investmentPlanRepository.js";
 import {
+  confirmImportPlanHoldingsSchema,
   createInvestmentPlanSchema,
   createPlanHoldingSchema,
   createPlanHoldingTransactionSchema,
@@ -38,9 +39,11 @@ import {
   parseEffectiveFrom,
 } from "../services/planTimelineService.js";
 import {
+  badgeColorForSeed,
   fundNameToInitials,
   randomBadgeColor,
 } from "../services/fundBadgeUtils.js";
+import { parseMfCentralExcel } from "../services/mfCentralImport/parseMfCentralExcel.js";
 
 function mapFundInputs(
   funds: {
@@ -569,6 +572,103 @@ export function investmentPlanController(plans: InvestmentPlanRepository) {
         return;
       }
       res.status(204).send();
+    },
+
+    previewImportHoldings: async (req: AuthedFileRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      await assertProjectMember(req.userId, projectId);
+
+      const file = req.file;
+      if (!file?.buffer?.length) {
+        res.status(400).json({ error: "Excel statement file is required" });
+        return;
+      }
+
+      let parsed: Awaited<ReturnType<typeof parseMfCentralExcel>>;
+      try {
+        parsed = await parseMfCentralExcel(file.buffer);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Failed to parse statement";
+        res.status(400).json({ error: message });
+        return;
+      }
+
+      const existing = await plans.listHoldings(projectId, planId, { includeClosed: true });
+      if (!existing) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
+      const existingNames = new Set(existing.map((row) => row.name.trim().toLowerCase()));
+
+      res.json({
+        from_date: parsed.from_date,
+        to_date: parsed.to_date,
+        funds: parsed.funds.map((fund) => ({
+          ...fund,
+          already_exists: existingNames.has(fund.name.trim().toLowerCase()),
+        })),
+      });
+    },
+
+    confirmImportHoldings: async (req: AuthedRequest, res: Response) => {
+      const projectId = String(req.params.projectId);
+      const planId = String(req.params.planId);
+      await assertProjectMember(req.userId, projectId);
+
+      const parsed = confirmImportPlanHoldingsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: parsed.error.flatten() });
+        return;
+      }
+
+      const funds = parsed.data.funds.flatMap((fund) => {
+        const badge = fundNameToInitials(fund.name);
+        if (!badge) return [];
+        const units = fund.units ?? 0;
+        const currentValue = fund.current_value ?? 0;
+        return [
+          {
+            name: fund.name,
+            badge,
+            badge_class_name: badgeColorForSeed(fund.name),
+            fund_type: fund.fund_type,
+            asset_type: fund.asset_type,
+            invested: fund.invested ?? 0,
+            current_value: currentValue,
+            current_nav: units > 0 ? currentValue / units : null,
+            orders: (fund.orders ?? []).map((order) => ({
+              txn_date: parseISODateOnly(order.txn_date),
+              nav: order.nav,
+              units: order.units,
+              amount: order.amount,
+              invested: Math.abs(order.amount),
+            })),
+          },
+        ];
+      });
+
+      if (funds.length === 0) {
+        res.status(400).json({ error: "Select at least one fund" });
+        return;
+      }
+
+      const result = await plans.importHoldings(projectId, planId, funds, {
+        replaceAll: parsed.data.replace_all,
+      });
+      if (!result) {
+        res.status(404).json({ error: "Plan not found" });
+        return;
+      }
+
+      res.json({
+        added: result.added,
+        skipped: result.skipped,
+        deleted: result.deleted,
+        orders_added: result.orders_added,
+        orders_skipped: result.orders_skipped,
+        holdings: result.holdings.map(toPlanHoldingRow),
+      });
     },
 
     listPlanTransactions: async (req: AuthedRequest, res: Response) => {
